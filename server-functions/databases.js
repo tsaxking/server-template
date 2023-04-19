@@ -1,9 +1,6 @@
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const path = require('path');
-const { hostname } = require('os');
-const { sendLog } = require('./structure/socket');
-// const { // createQueryLog } = require('./server-logs');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -140,22 +137,6 @@ class APP_DB {
 }
 
 
-const daysTimeout = (cb, days) => {
-    // 86400 seconds in a day
-    let msInDay = 86400 * 1000;
-
-    let dayCount = 0;
-    let timer = setInterval(() => {
-        dayCount++; // a day has passed
-
-        if (dayCount === days) {
-            clearInterval(timer);
-            cb();
-        }
-    }, msInDay);
-}
-
-// const DB = new _DB(path.resolve(__dirname, '../db', './main.db'));
 const DB = new APP_DB('./main.db');
 
 module.exports = { DB, APP_DB };
