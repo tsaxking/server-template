@@ -284,24 +284,24 @@ const runBuild = async (build) => {
 
 runBuild(build);
 
-// process.on('data', (data) => {
-//     data = data.toString().trim().replace('\r', '');
-//     const [command, ...args] = data.split(' ');
+process.on('data', (data) => {
+    data = data.toString().trim().replace('\r', '');
+    const [command, ...args] = data.split(' ');
 
-//     switch (command) {
-//         case 'rebuild' || 'build' || 'rb' || 'b':
-//             runBuild();
-//             break;
-//     }
-// });
+    switch (command) {
+        case 'rebuild' || 'build' || 'rb' || 'b':
+            runBuild();
+            break;
+    }
+});
 
-// fs.watch(path.resolve(__dirname, '../static'), (event, filename) => {
-//     const exists = Object.entries(build.streams).filter(([stream, {type}]) => {
-//         return stream + '.min.' + type === filename;
-//     });
+fs.watch(path.resolve(__dirname, '../static'), (event, filename) => {
+    const exists = Object.entries(build.streams).filter(([stream, {type}]) => {
+        return stream + '.min.' + type === filename;
+    });
 
-//     if (exists.length) return;
+    if (exists.length) return;
 
-//     console.log('File changed, rebuilding...');
-//     runBuild();
-// });
+    console.log('File changed, rebuilding...');
+    runBuild();
+});
