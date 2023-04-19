@@ -1,0 +1,42 @@
+{
+    "ignore": [],
+    "minify": true,
+    "submodules": {
+        "/static/classes/canvas": {
+            "ts": false,
+            "outFile": "top"
+        },
+        "/static/classes/color": {
+            "ts": true,
+            "outFile": "top"
+        },
+        "/static/classes/custom-bootstrap": {
+            "ts": false,
+            "outFile": "top"
+        },
+        "/static/classes/tables-js/2.0": {
+            "ts": true,
+            "outFile": "top"
+        }
+    },
+    "files": {
+        "top": {
+            "folder": "./static/top/",
+            "type": "js",
+            "priority": [
+                "highest-priority",
+                "higher-priority"
+            ],
+            "ts": true
+        },
+        "bottom": {
+            "folder": "/static/bottom/",
+            "type": "js",
+            "ts": false
+        },
+        "style": {
+            "folder": "./static/css/",
+            "type": "css"
+        }
+    }
+}
