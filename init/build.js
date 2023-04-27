@@ -18,8 +18,7 @@ const readJSON = (path) => {
     return JSON.parse(content);
 }
 
-const build = getJSON('/build');
-
+const build = readJSON(path.resolve(__dirname, './build.json'));
 const mapDirectory = (dir, type, priority = []) => {
     const files = [];
 
@@ -147,8 +146,33 @@ const runTs = async (directory) => {
     });
 }
 
+const watching = [];
 
-const runBuild = async (build) => {
+const runBuild = async(build) => {
+    const child = ChildProcess.spawn('tsc', [], {
+        stdio: 'pipe',
+        shell: true,
+        cwd: path.resolve(__dirname, '../server-functions'),
+        env: process.env
+    });
+
+    child.on('error', console.error);
+    child.stdout.on('data', console.log);
+    child.stderr.on('data', console.error);
+
+    const watch = (eventType, filename) => {
+        if (!eventType === 'change') return;
+        if (filename && filename.endsWith('.ts')) {
+            console.log('Change detected in server-functions folder! Rebuilding...');
+            runBuild(build);
+        }
+    }
+
+    if (!watching.includes(path.resolve(__dirname, '../server-functions'))) {
+        fs.watch(path.resolve(__dirname, '../server-functions'), watch);
+        watching.push(path.resolve(__dirname, '../server-functions'));
+    }
+
     const { ignore: globalIgnore, minify, submodules, streams, buildDir } = build;
 
     if (!streams) {
@@ -184,6 +208,22 @@ const runBuild = async (build) => {
 
         const dir = path.resolve(__dirname, folder);
 
+        const watch = (event, filename) => {
+            console.log(event, filename);
+            if (ignore && ignore.indexOf(filename) !== -1) return;
+            // if file is saved
+            if (event === 'change') {
+                console.log('Writing', filename, 'to', name + '.' + type, '...');
+
+                runBuild(build);
+            }
+        }
+
+        if (!watching.includes(dir)) {
+            fs.watch(dir, { recursive: true }, watch);
+            watching.push(dir);
+        }
+
         const fileStream = fileStreams[name];
 
         const files = mapDirectory(dir, type, priority);
@@ -203,7 +243,7 @@ const runBuild = async (build) => {
 
                 continue;
             }
-            
+
             const content = fs.readFileSync(file.path);
             fileStream.write(content);
             fileStream.write(delimiters[type]);
@@ -220,6 +260,11 @@ const runBuild = async (build) => {
             }
 
             const { ts, stream, type, ignore, priority } = submodule;
+
+            if (!stream) {
+                await runTs(folder);
+                continue;
+            }
 
             // console.log(path.resolve(__dirname, buildDir, name + '.' + type));
 
@@ -293,15 +338,4 @@ process.on('data', (data) => {
             runBuild();
             break;
     }
-});
-
-fs.watch(path.resolve(__dirname, '../static'), (event, filename) => {
-    const exists = Object.entries(build.streams).filter(([stream, {type}]) => {
-        return stream + '.min.' + type === filename;
-    });
-
-    if (exists.length) return;
-
-    console.log('File changed, rebuilding...');
-    runBuild();
 });
