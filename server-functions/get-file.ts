@@ -190,20 +190,53 @@ const runBuilds = (template: string) => {
 
             root.querySelectorAll('script').forEach(s => {
                 if (!s.attributes.src) return s.remove();
+                const stream = buildJSON.streams[s.attributes.src];
+                if (!stream) return;
 
                 const ext = path.extname(s.attributes.src);
                 const name = path.basename(s.attributes.src, ext);
 
                 s.setAttribute('src', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+
+                (stream.files as string[]).forEach(f => {
+                    // console.log(f);
+
+                    // find --ignore-build
+                    const regex = /--ignore-build\s*/g;
+                    if (!regex.test(f)) return;
+
+
+                    // console.log('Includes ignore build', f);
+                    f = f.replace('--ignore-build', '').trim();
+                    const script = parse(`<script src="${f.replace('[ts]','')}"></script>`);
+                    // console.log(script.innerHTML);
+                    insertBefore(s.parentNode, script, s);
+                });
             });
 
             root.querySelectorAll('link').forEach(l => {
                 if (!l.attributes.href) return l.remove();
+                const stream = buildJSON.streams[l.attributes.href];
+                if (!stream) return;
 
                 const ext = path.extname(l.attributes.href);
                 const name = path.basename(l.attributes.href, ext);
 
                 l.setAttribute('href', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+
+
+                (stream.files as string[]).forEach(f => {
+                    // console.log(f);
+                    // find --ignore-build
+                    const regex = /--ignore-build\s*/g;
+                    if (!regex.test(f)) return;
+
+                    // console.log('Includes ignore build', f);
+                    f = f.replace('--ignore-build', '').trim();
+                    const link = parse(`<link rel="stylesheet" href="${f}">`);
+                    // console.log(link.innerHTML);
+                    insertBefore(l.parentNode, link, l);
+                });
             });
             break;
         case 'test': // testing (combine but do not minify)
@@ -211,14 +244,42 @@ const runBuilds = (template: string) => {
 
             root.querySelectorAll('script').forEach(s => {
                 if (!s.attributes.src) return s.remove();
+                const stream = buildJSON.streams[s.attributes.src];
+                if (!stream) return;
 
                 s.setAttribute('src', `${buildJSON.buildDir}${s.attributes.src}`);
+                (stream.files as string[]).forEach(f => {
+                    // console.log(f);
+                    // find --ignore-build
+                    const regex = /--ignore-build\s*/g;
+                    if (!regex.test(f)) return;
+
+                    // console.log('Includes ignore build', f);
+                    f = f.replace('--ignore-build', '').trim();
+                    const script = parse(`<script src="${f.replace('[ts]','')}"></script>`);
+                    // console.log(script.innerHTML);
+                    insertBefore(s.parentNode, script, s);
+                });
             });
 
             root.querySelectorAll('link').forEach(l => {
                 if (!l.attributes.href) return l.remove();
+                const stream = buildJSON.streams[l.attributes.href];
+                if (!stream) return;
 
-                l.setAttribute('href', `${buildJSON.buildDir}${s.attributes.src}`);
+                l.setAttribute('href', `${buildJSON.buildDir}${l.attributes.href}`);
+                (stream.files as string[]).forEach(f => {
+                    // console.log(f);
+                    // find --ignore-build
+                    const regex = /--ignore-build\s*/g;
+                    if (!regex.test(f)) return;
+
+                    // console.log('Includes ignore build', f);
+                    f = f.replace('--ignore-build', '').trim();
+                    const link = parse(`<link rel="stylesheet" href="${f}">`);
+                    // console.log(link.innerHTML);
+                    insertBefore(l.parentNode, link, l);
+                });
             });
             break;
         case 'dev': // development (do not combine files)

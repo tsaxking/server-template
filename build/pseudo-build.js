@@ -93,7 +93,13 @@ module.exports = {
             if (!streams[stream].files) throw new Error(`Build file ${stream} is missing files array!`);
             const smallIgnore = streams[stream].ignore || [];
             if (stream.endsWith('.js')) {
-                for (const file of streams[stream].files) {
+                for (let file of streams[stream].files) {
+                    file = file.replace('--ignore-build', '').trim();
+                    if (file.includes('--ignore-build')) {
+                        globalFiles.push(file);
+                        continue;
+                    }
+
                     if (ignore.includes(file) || smallIgnore.includes(file)) continue;
                     if (file.endsWith('.js')) {
                         globalFiles.push(file);
@@ -118,7 +124,9 @@ module.exports = {
                     }
                 }
             } else {
-                for (const file of streams[stream].files) {
+                for (let file of streams[stream].files) {
+                    file = file.replace('--ignore-build', '').trim();
+
                     if (ignore.includes(file) || smallIgnore.includes(file)) continue;
                     if (file.endsWith('.css')) {
                         globalFiles.push(file);

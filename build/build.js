@@ -275,6 +275,8 @@ const runBuild = async() => {
 
         if (files) {
             for (let f of files) {
+                if (f.includes('--ignore-build')) continue;
+
                 if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
                 if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
                 if (f.includes('http')) {
@@ -294,6 +296,8 @@ const runBuild = async() => {
                         if (globalIgnore && ignoreTest(globalIgnore, p)) continue;
                         if (ignore && ignoreTest(ignore, p)) continue;
 
+                        if (p.includes('--ignore-build')) return;
+
                         const content = fs.readFileSync(p);
                         fileStream.write(content);
                         fileStream.write(delimiters[type]);
@@ -306,6 +310,8 @@ const runBuild = async() => {
                     for (const f of files) {
                         if (ignore && ignoreTest(ignore, f.path.replace('[ts]', ''))) continue;
                         if (globalIgnore && ignoreTest(globalIgnore, f.path.replace('[ts]', ''))) continue;
+
+                        if (f.path.includes('--ignore-build')) return;
 
                         const content = fs.readFileSync(path.resolve(__dirname, f.path.replace('[ts]', '')));
                         fileStream.write(content);
@@ -320,6 +326,8 @@ const runBuild = async() => {
 
                         if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
                         if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
+
+                        if (f.includes('--ignore-build')) return;
 
                         fileStream.write(css);
                         fileStream.write(delimiters[type]);

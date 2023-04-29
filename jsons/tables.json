@@ -3,15 +3,8 @@
         "TableName": {
             "columns": {
                 "ColumnName": {
-                    "type": "ColumnType",
-                    "default": "DefaultValue",
-                    "primary": true,
-                    "unique": true,
-                    "notNull": true,
-                    "foreignKey": {
-                        "table": "TableName",
-                        "column": "ColumnName"
-                    }
+                    "type": "javascript type",
+                    "init": "TEXT NOT NULL (etc.)"
                 }
             },
             "rows": [
@@ -22,4 +15,39 @@
             "description": "TableDescription"
         }
     */
+
+    "Accounts": {
+        "columns": {
+            "id": {
+                "type": "string",
+                "init": "TEXT NOT NULL PRIMARY KEY"
+            },
+            "username": {
+                "type": "string",
+                "init": "TEXT NOT NULL UNIQUE"
+            },
+            "password": {
+                "type": "string",
+                "init": "TEXT NOT NULL"
+            },
+            "email": {
+                "type": "string",
+                "init": "TEXT NOT NULL UNIQUE"
+            }
+        },
+        "rows": [
+            {
+                "id": "1",
+                "username": "admin",
+                "password": "admin",
+                "email": "test@gmail.com"
+            },
+            {
+                "id": "2",
+                "username": "user",
+                "password": "user",
+                "email": "test2@gmail.com"
+            }
+        ]
+    }
 }
