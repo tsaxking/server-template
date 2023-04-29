@@ -8,7 +8,30 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
 require('dotenv').config();
-const { getJSON } = require('../server-functions/get-file');
+const getJSON = (file) => {
+    let p;
+    if (file.includes('/') || file.includes('\\')) {
+        p = file;
+    }
+    else
+        p = path.resolve(__dirname, '../jsons', file + '.json');
+    p = path.resolve(__dirname, p);
+    if (!fs.existsSync(p)) {
+        return false;
+    }
+    let content = fs.readFileSync(p, 'utf8');
+    // remove all /* */ comments
+    content = content.replace(/\/\*[\s\S]*?\*\//g, '');
+    // remove all // comments
+    content = content.replace(/\/\/ .*/g, '');
+    try {
+        return JSON.parse(content);
+    }
+    catch (e) {
+        console.error('Error parsing JSON file: ' + file, e);
+        return false;
+    }
+}
 
 const updates = [];
 
@@ -30,6 +53,17 @@ async function initDB() {
 const createTable = async([tableName, table]) => {
     const { columns, rows, description } = table;
 
+    console.log(`Checking to see if table ${tableName} exists`);
+
+    const makeTableQuery = `
+        CREATE TABLE IF NOT EXISTS ${tableName} (
+            rowId INTEGER PRIMARY KEY AUTOINCREMENT,
+            ${Object.entries(columns).map(([columnName, { init }]) => `${columnName} ${init}`).join(', ')}
+        )
+    `;
+
+    await DB.run(makeTableQuery);
+
     if (!columns) return;
     const columnPromises = Object.entries(columns).map(async ([columnName, { init }]) => {
         const query = `
@@ -43,7 +77,7 @@ const createTable = async([tableName, table]) => {
             console.log(`Column ${columnName} does not exist in table ${tableName}, creating column`);
             const query = `
                 ALTER TABLE ${tableName}
-                ADD COLUMN ${init}
+                ADD COLUMN ${columnName} ${init}
             `;
 
             await DB.run(query);
@@ -119,19 +153,9 @@ const createTable = async([tableName, table]) => {
 async function tableTest() {
     console.log('Checking to see if tables exist');
 
-    const tables = getJSON('/tables');
+    const tables = getJSON('tables');
 
-    const currentTables = await DB.all(`
-        SELECT name
-        FROM sqlite_master
-        WHERE type = 'table'
-    `);
-
-    const neededTables = Object.entries(tables).filter(([name]) => !currentTables.some(t => t.name === name));
-
-    if (neededTables.length) {
-        await Promise.all(neededTables.map(createTable));
-    }
+    return await Promise.all(Object.entries(tables).map(createTable));
 }
 
 
@@ -195,7 +219,7 @@ async function runUpdates() {
 
     const manifest = JSON.parse(
         fs.readFileSync(
-            path.resolve(__dirname, "./history/manifest.txt"), 'utf8'));
+            path.resolve(__dirname, "../history/manifest.txt"), 'utf8'));
 
     const {
         lastUpdate,
@@ -245,7 +269,7 @@ async function runUpdates() {
     manifest.updates = manifest.updates.concat(runUpdates);
 
     fs.writeFileSync(
-        path.resolve(__dirname, "./history/manifest.txt"),
+        path.resolve(__dirname, "../history/manifest.txt"),
         JSON.stringify(manifest, null, 4));
 }
 
@@ -260,12 +284,12 @@ async function makeBackup() {
 function setBackupIntervals() {
     console.log('Setting backup intervals...');
 
-    const files = fs.readdirSync(path.resolve(__dirname, './history'));
+    const files = fs.readdirSync(path.resolve(__dirname, '../history'));
 
     files.forEach(f => {
         if (f == 'manifest.txt') return;
 
-        const p = path.resolve(__dirname, './history', f);
+        const p = path.resolve(__dirname, '../history', f);
 
         const now = new Date();
         const fileDate = new Date(+f.split('.')[0]);
@@ -281,32 +305,32 @@ function setBackupIntervals() {
 
 
 
-const runFunction = async(name) => {
+const runFunction = async(fn) => {
     const now = Date.now();
     try {
-        await eval(`${name}()`);
+        await fn()
     } catch (e) {
-        console.log('Error running function:', name);
+        console.log('Error running function:', fn.name);
         console.error(e);
         return;
     }
-    console.log('Finished running function:', name, 'in', Date.now() - now, 'ms');
+    console.log('Finished running function:', fn.name, 'in', Date.now() - now, 'ms');
 }
 
 const serverUpdate = async() => {
-    await runFunction('makeFilesAndFolders');
-    await runFunction('initDB');
-    await runFunction('tableTest');
-    return console.log('Finished all update tasks!');
+    await runFunction(makeFilesAndFolders);
+    await runFunction(initDB);
+    await runFunction(tableTest);
 
     const promises = [
-        runFunction('runUpdates')
+        runFunction(runUpdates)
     ];
 
-    if (args.includes('all')) promises.push(runFunction('makeBackup'));
+    if (args.includes('all')) promises.push(runFunction(makeBackup));
 
     await Promise.all(promises);
-    await runFunction('setBackupIntervals');
+    await runFunction(setBackupIntervals);
+    return console.log('Finished all update tasks!');
 }
 
 if (args.includes('main')) serverUpdate();
