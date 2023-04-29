@@ -6,6 +6,7 @@ const fs = require('fs');
 const ObjectsToCsv = require('objects-to-csv');
 const { getClientIp } = require('request-ip');
 const { Session } = require('./server-functions/structure/sessions');
+const builder = require('./server-functions/page-builder');
 
 require('dotenv').config();
 const { PORT, DOMAIN } = process.env;
@@ -97,14 +98,47 @@ app.use(Session.middleware);
 
 
 
-// your requests here
+// production/testing/development middleward
+
+
+app.use((req, res, next) => {
+    switch (env) {
+        case 'prod':
+            (() => {
+                // This code will only run in production
+
+
+            })();
+            break;
+        case 'test':
+            (() => {
+                // this code will only run in testing
+                // you could add features like auto-reloading, automatic sign-in, etc.
+
+
+            })();
+            break;
+        case 'dev':
+            (() => {
+                // this code will only run in development
+                // you could add features like auto-reloading, automatic sign-in, etc.
+
+
+            })();
+            break;
+    }
+
+    next();
+});
+
+
 
 
 // █▀▄ ██▀ ▄▀▄ █ █ ██▀ ▄▀▀ ▀█▀ ▄▀▀ 
 // █▀▄ █▄▄ ▀▄█ ▀▄█ █▄▄ ▄█▀  █  ▄█▀ 
 
-
-
+// this can be used to build pages on the fly and send them to the client
+// app.use(builder);
 
 
 
