@@ -31,7 +31,6 @@
                 "[ts]../static/js/classes/canvas",
                 "[ts]../static/js/classes/color",
                 "[ts]../static/js/classes/custom-bootstrap/src",
-                "[ts]../static/js/classes/tables-js/2.0",
 
                 // all js files in these folders (no ts)
                 "../static/js/top",

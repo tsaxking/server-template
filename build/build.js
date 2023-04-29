@@ -212,6 +212,9 @@ const getDependency = async (url) => {
 
 
 const runBuild = async() => {
+    console.log('Starting build...');
+
+
     const child = ChildProcess.spawn('tsc', [], {
         stdio: 'pipe',
         shell: true,
@@ -388,12 +391,11 @@ const runBuild = async() => {
 
 runBuild();
 
-process.on('data', (data) => {
+process.stdin.on('data', (data) => {
     data = data.toString().trim().replace('\r', '');
     const [command, ...args] = data.split(' ');
-
     switch (command) {
-        case 'rebuild' || 'build' || 'rb' || 'b':
+        case 'rebuild':
             runBuild();
             break;
     }

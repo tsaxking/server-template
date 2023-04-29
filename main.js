@@ -222,13 +222,14 @@ update.stdout.on('data', data => {
                 data = data.toString().trim('\r').split(' ');
                 const [command, ...args] = data;
                 switch (command.toLowerCase()) {
-                    case 'rebuild', 'rb':
+                    case 'rebuild':
                         build.stdin.write('rebuild');
                         break;
-                    case 'update', 'ud':
+                    case 'update':
                         update.stdin.write('npm run update\n');
                         break;
-                    case 'restart', 'rs':
+                    case 'rs':
+                        build.stdin.write('rebuild');
                         server.stdin.write('rs\n');
                         break;
                     case 'git':
