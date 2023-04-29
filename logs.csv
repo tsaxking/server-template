@@ -1,5 +1,0 @@
-date,duration,ip,method,url,status,userAgent,body,params,query
-1682772115118,4,::1,GET,/,200,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",,{},{}
-1682772116283,7,::1,GET,/,200,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",,{},{}
-1682772180925,5,::1,GET,/,200,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",,{},{}
-1682772182118,7,::1,GET,/,200,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",,{},{}
