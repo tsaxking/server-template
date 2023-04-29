@@ -297,7 +297,7 @@ const serverUpdate = async() => {
     await runFunction('makeFilesAndFolders');
     await runFunction('initDB');
     await runFunction('tableTest');
-    return;
+    return console.log('Finished all update tasks!');
 
     const promises = [
         runFunction('runUpdates')

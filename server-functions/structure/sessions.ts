@@ -58,6 +58,8 @@ export class Session {
     }
 
     static loadSessions() {
+        if (!fs.existsSync(path.resolve(__dirname, './sessions.txt'))) return fs.writeFileSync(path.resolve(__dirname, './sessions.txt'), '{}', 'utf8');
+
         const s = fs.readFileSync(path.resolve(__dirname, './sessions.txt'), 'utf8');
         const sessions = JSON.parse(s);
 

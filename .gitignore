@@ -7,12 +7,13 @@ yarn-error.log*
 lerna-debug.log*
 
 
-
-
+sessions.txt
+/build/cache/
 archive/
 history/
 uploads/
 db/
+static/build/
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

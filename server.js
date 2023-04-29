@@ -1,8 +1,6 @@
 const express = require('express');
 const { Server } = require('socket.io');
 const http = require('http');
-const { getJSON } = require('jquery');
-const { openAllInFolderSync } = require('./server-functions/get-file');
 const path = require('path');
 const fs = require('fs');
 const ObjectsToCsv = require('objects-to-csv');
@@ -97,55 +95,6 @@ app.post('/*', (req, res, next) => {
 
 app.use(Session.middleware);
 
-
-const staticFiles = {
-    topScripts: [],
-    bottomScripts: [],
-    styles: []
-};
-
-const build = getJSON('/build');
-if (mode === 'production') {
-    const files = Object.keys(build.streams);
-
-    files.forEach((file) => {
-        switch (file) {
-            case 'top':
-                staticFiles.topScripts.push(`../static/build/${file}.min.js`);
-                break;
-            case 'bottom':
-                staticFiles.bottomScripts.push(`../static/build/${file}.min.js`);
-                break;
-            case 'style':
-                staticFiles.styles.push(`../static/build/${file}.min.css`);
-                break;
-        }
-    });
-} else { // development
-    openAllInFolderSync(path.resolve('./static/js/top'), (file) => {
-        staticFiles.topScripts.push(`../static/js/top/${file}`);
-    }, {
-        sort: (a, b) => {
-            return build.top.priority.indexOf(a) - build.top.priority.indexOf(b);
-        }
-    });
-
-    openAllInFolderSync(path.resolve('./static/js/bottom'), (file) => {
-        staticFiles.bottomScripts.push(`../static/js/bottom/${file}`);
-    }, {
-        sort: (a, b) => {
-            return build.bottom.priority.indexOf(a) - build.bottom.priority.indexOf(b);
-        }
-    });
-
-    openAllInFolderSync(path.resolve('./static/css'), (file) => {
-        staticFiles.styles.push(`../static/css/${file}`);
-    }, {
-        sort: (a, b) => {
-            return build.style.priority.indexOf(a) - build.style.priority.indexOf(b);
-        }
-    });
-}
 
 
 // your requests here
@@ -270,7 +219,7 @@ const clearLogs = () => {
     logCache = [];
 }
 
-
+const timeTo12AM = 1000 * 60 * 60 * 24 - Date.now() % (1000 * 60 * 60 * 24);
 console.log('Clearing logs in', timeTo12AM / 1000 / 60, 'minutes');
 setTimeout(() => {
     clearLogs();

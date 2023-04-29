@@ -8,7 +8,7 @@
     "dev": "node main.js dev",
     "start": "node main.js prod",
     "build": "node ./build/build.js",
-    "update": "npm i && node ./init/server-update.js",
+    "update": "npm i && node ./build/server-update.js",
     "test-env": "node ./test-env/test.js"
   },
   "repository": {
