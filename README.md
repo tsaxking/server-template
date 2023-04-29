@@ -26,9 +26,7 @@ rm -rf .git
 git init
 git add .
 git commit -m "Initial commit"
-```
-Create a new repository on github and copy the link to the repository
-```bash
+# Now, Create a new repository on github and copy the link to the repository
 gh repo create <name of repository>
 git remote add origin <link to repository>
 git push -u origin master
