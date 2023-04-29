@@ -1,16 +1,15 @@
 const arguments = process.argv.slice(2);
 console.log('Arguments:', arguments.map(a => '\x1b[35m' + a + '\x1b[0m').join(' '));
-const [env, port, ...args] = arguments;
+const [env, ...args] = arguments;
 const modes = {
     test: {
         type: 'test',
         description: 'In test mode, only ts is rendered. This is the mode you should use when debugging',
         command: 'npm test',
         quickInfo: [
-            'Static Classes are \x1b[31mnot\x1b[0m combined',
+            'Static Files are \x1b[31mnot\x1b[0m combined or minified',
             'Debugging is \x1b[32measier\x1b[0m',
             'Uploads are \x1b[31mslower\x1b[0m',
-            'Auto \x1b[32mlogin\x1b[0m',
             'Browser window is \x1b[32mspawned\x1b[0m'
         ]
     },
@@ -19,10 +18,9 @@ const modes = {
         description: 'This environment is similar to the production environment, but it will still auto login and spawn a browser window.',
         command: 'npm run dev',
         quickInfo: [
-            'Static Classes are \x1b[32mcombined\x1b[0m',
+            'Static Files are \x1b[32mcombined\x1b[0m but not \x1b[32mminified\x1b[0m',
             'Debugging is \x1b[31mmore difficult\x1b[0m',
             'Uploads are \x1b[32mfaster\x1b[0m',
-            'Auto \x1b[32mlogin\x1b[0m',
             'Browser window is \x1b[32mspawned\x1b[0m'
         ]
     },
@@ -31,10 +29,9 @@ const modes = {
         description: `In production, the idea is everything is more optimized. (This is a work in progress).`,
         command: 'npm start',
         quickInfo: [
-            'Static Classes are \x1b[32mcombined\x1b[0m',
+            'Static Files are \x1b[32mcombined\x1b[0m and \x1b[32mminified\x1b[0m',
             'Debugging is \x1b[31mmore difficult\x1b[0m',
             'Uploads are \x1b[32mfaster\x1b[0m',
-            'No \x1b[31mauto login\x1b[0m (if you are \x1b[34malready logged in\x1b[0m from previous sessions, you \x1b[32mwill be logged in.\x1b[0m All \x1b[34mnew\x1b[0m sessions will \x1b[31mnot\x1b[0m be logged in.)',
             'Browser window is \x1b[31mnot spawned\x1b[0m'
         ]
     }
@@ -163,29 +160,11 @@ update.stdout.on('data', data => {
     try {
         const str = data.toString().trim('\r');
         if (str.includes('Finished all update tasks')) {
-
-
-            const now = new Date();
-            const next2am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 2, 0, 0, 0);
-
-            const hours = now.getHours() - next2am.getHours();
-            const minutes = now.getMinutes() - next2am.getMinutes();
-            const seconds = now.getSeconds() - next2am.getSeconds();
-
-            console.log(`Next update is in ${24 - hours} hours, ${60 - minutes} minutes, and ${60 - seconds} seconds.`);
-
-            setTimeout(() => {
-                update.stdin.write('node ./server-update.js make events updates backup tba');
-                setInterval(() => {
-                    update.stdin.write('node ./server-update.js make events updates backup tba');
-                }, 1000 * 60 * 60 * 24);
-            }, Math.abs(next2am.getTime() - now.getTime()));
-
             // server is in green
             const build = spawnChild({
                 command: 'node',
                 args: [
-                    'build.js',
+                    './init/build.js',
                     env == 'test' ? '' : 'all',
                     env
                 ]
@@ -196,7 +175,6 @@ update.stdout.on('data', data => {
                 args: [
                     'server.js',
                     env ? env : 'test',
-                    process.env.PORT || port || 2122,
                     ...args
                 ]
             }, '\x1b[32mServer\x1b[0m');
@@ -256,23 +234,6 @@ update.stdout.on('data', data => {
             // when the user writes in the console
             process.stdin.on('data', (data) => {
                 data = data.toString().trim('\r').split(' ');
-                // const [childProcess, ...args] = data;
-
-                // switch (childProcess.toLowerCase()) {
-                //     case 'b', 'build', '-b':
-                //         build.stdin.write(args.join(' ') + '\n');
-                //         break;
-                //     case 's', 'server', '-s':
-                //         server.stdin.write(args.join(' ') + '\n');
-                //         break;
-                //     case 'd', 'update', '-d':
-                //         update.stdin.write(args.join(' ') + '\n');
-                //         break;
-                //     default:
-                //         console.log('Invalid command');
-                //         break;
-                // }
-
                 const [command, ...args] = data;
                 switch (command.toLowerCase()) {
                     case 'rebuild', 'rb':
@@ -293,36 +254,10 @@ update.stdout.on('data', data => {
                 }
             });
 
-
-            // const fs = require('fs');
-            // const path = require('path');
-            // const watchFiles = () => {
-            //     const folders = [
-            //         './server-functions',
-            //         './static',
-            //         './templates'
-            //     ];
-
-            //     const watchDir = (dir) => {
-            //         // recursive to watch all files in dir
-
-            //         const p = path.resolve(__dirname, dir);
-
-            //         // if it is a file, watch
-            //         if (fs) {
-
-            //         } else {
-            //             fs.readdirSync(p).forEach(f => watchDir);
-            //         }
-            //     }
-
-            //     folders.forEach(watchDir);
-            // };
-
             if (arguments.includes('prod') || arguments.includes('no-browser')) return;
 
             // open browser
-            const url = 'http://localhost:' + (process.env.PORT || port || 2122);
+            const url = 'http://localhost:' + (process.env.PORT);
             console.log('To not open browser, run in production mode or run with the argument "no-browser"');
 
             // start a new browser window

@@ -8,7 +8,8 @@
     "dev": "node main.js dev",
     "start": "node main.js prod",
     "build": "node ./init/build.js",
-    "update": "npm i && node ./init/server-update.js"
+    "update": "npm i && node ./init/server-update.js",
+    "test-env": "node ./test-env/test.js"
   },
   "repository": {
     "type": "git",

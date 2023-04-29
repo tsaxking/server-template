@@ -38,7 +38,7 @@ export class Session {
     }
 
     static saveSessions() {
-        const s = {};
+        const s: {[key: string]: any} = {};
         Object.entries(Session.sessions).forEach(([id, session]) => {
             // customize what you want to save
             s[id] = {
@@ -67,7 +67,7 @@ export class Session {
     }
 
     static fromSessObj(s: any) {
-        const session = new Session(null, null);
+        const session = new Session();
         session.ip = s.ip;
         session.id = s.id;
         session.latestActivity = s.latestActivity;
@@ -95,6 +95,7 @@ export class Session {
 
     constructor(req?: CustomRequest, res?: Response) {
         if (req) this.ip = getClientIp(req);
+        else this.ip = 'unknown';
         this.id = uuid();
 
         if (res) res.cookie('ssid', this.id, {
@@ -112,7 +113,7 @@ export class Session {
     }
 
     signOut() {
-        this.account = null;
+        delete this.account;
     }
 
     destroy() {

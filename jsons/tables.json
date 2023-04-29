@@ -1,0 +1,25 @@
+{
+    /*
+        "TableName": {
+            "columns": {
+                "ColumnName": {
+                    "type": "ColumnType",
+                    "default": "DefaultValue",
+                    "primary": true,
+                    "unique": true,
+                    "notNull": true,
+                    "foreignKey": {
+                        "table": "TableName",
+                        "column": "ColumnName"
+                    }
+                }
+            },
+            "rows": [
+                {
+                    "column": "value"
+                }
+            ],
+            "description": "TableDescription"
+        }
+    */
+}

@@ -5,7 +5,7 @@ const path = require('path');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 
-class APP_DB {
+class MAIN_DB {
     constructor(filepath) {
         this.path = path.resolve(__dirname, '../db', filepath);
         this.queue = [];
@@ -136,7 +136,6 @@ class APP_DB {
     }
 }
 
+const DB = new MAIN_DB('./main.db');
 
-const DB = new APP_DB('./main.db');
-
-module.exports = { DB, APP_DB };
+module.exports = { DB };

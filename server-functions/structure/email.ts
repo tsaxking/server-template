@@ -67,6 +67,6 @@ export class Email {
 
 
     send() {
-        if (os)
+        if (os);
     }
 }
