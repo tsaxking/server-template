@@ -164,7 +164,7 @@ update.stdout.on('data', data => {
             const build = spawnChild({
                 command: 'node',
                 args: [
-                    './init/build.js',
+                    './build/build.js',
                     env == 'test' ? '' : 'all',
                     env
                 ]
@@ -249,7 +249,7 @@ update.stdout.on('data', data => {
                         spawnGitClient(...args);
                         break;
                     case 'db':
-                        update.stdin.write('node ./init/server-update.js\n');
+                        update.stdin.write('node ./build/server-update.js\n');
                         break;
                 }
             });

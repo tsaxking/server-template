@@ -24,6 +24,36 @@ io.on('connection', (socket) => {
     console.log('a user connected');
     // your socket code here
 
+    // ▄▀▀ ▄▀▄ ▄▀▀ █▄▀ ██▀ ▀█▀ ▄▀▀ 
+    // ▄█▀ ▀▄▀ ▀▄▄ █ █ █▄▄  █  ▄█▀ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     socket.on('disconnect', () => {
         console.log('user disconnected');
@@ -121,7 +151,8 @@ if (mode === 'production') {
 // your requests here
 
 
-
+// █▀▄ ██▀ ▄▀▄ █ █ ██▀ ▄▀▀ ▀█▀ ▄▀▀ 
+// █▀▄ █▄▄ ▀▄█ ▀▄█ █▄▄ ▄█▀  █  ▄█▀ 
 
 
 

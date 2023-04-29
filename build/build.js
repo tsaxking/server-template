@@ -5,15 +5,39 @@ const postcss = require('postcss');
 const cssnano = require('cssnano');
 const autoprefixer = require('autoprefixer');
 const ChildProcess = require('child_process');
+const axios = require('axios');
+const sass = require('sass');
+
+// const globalWatchIgnore = [];
+// fs.watch(path.resolve(__dirname, '../'), (event, filename) => {
+//     if (event === 'rename' && filename.endsWith('.js') && !globalWatchIgnore.includes(filename)) {
+//         globalWatchIgnore.push(filename);
+//     }
+// });
+
+
+let watchDirs = [];
+const watchDir = (dir) => {
+    // const watch = (eventType, filename) => {
+    //     if (filename && (filename.includes('.js') || filename.includes('.ts')) && !globalWatchIgnore.includes(filename)) {
+    //         watchDirs.forEach(fs.unwatchFile);
+    //         watchDirs = [];
+    //         runBuild();
+    //     }
+    // };
+
+    // fs.watch(dir, watch);
+    // watchDirs.push(dir);
+}
+
 
 const readJSON = (path) => {
     let content = fs.readFileSync(path, 'utf8');
 
     // remove all /* */ comments
     content = content.replace(/\/\*[\s\S]*?\*\//g, '');
-
-    // remove all // comments
-    content = content.replace(/\/\/.*/g, '');
+    // remove every comment after "// "
+    content = content.replace(/\/\/ .*/g, '');
 
     return JSON.parse(content);
 }
@@ -56,7 +80,7 @@ const mapDirectory = (dir, type, priority = []) => {
 };
 
 const delimiters = {
-    js: ";",
+    js: ";\n",
     css: "\n"
 }
 
@@ -131,8 +155,6 @@ const runTs = async (directory) => {
                 case 127:
                     return rej('tsc is not installed properly on your machine! Please install it globally with "npm i -g typescript"!', directory);
                 // if tsc is installed but there is no tsconfig.json
-                case 1:
-                    return rej('No tsconfig.json found!', directory);
                 default:
                     break;
             }
@@ -148,7 +170,30 @@ const runTs = async (directory) => {
 
 const watching = [];
 
-const runBuild = async(build) => {
+
+if (!fs.existsSync(path.resolve(__dirname, './cache'))) {
+    fs.mkdirSync(path.resolve(__dirname, './cache'));
+}
+
+
+const getDependency = async (url) => {
+    const fileSafeName = url.replace(/[^a-zA-Z0-9]/g, '_');
+    if (fs.existsSync(path.resolve(__dirname, './cache', fileSafeName))) {
+        return fs.readFileSync(path.resolve(__dirname, './cache', fileSafeName), 'utf8');
+    }
+
+    const { data } = await axios.get(url);
+
+    fs.writeFileSync(path.resolve(__dirname, './cache', fileSafeName), data, 'utf8');
+
+    return data;
+};
+
+
+
+
+
+const runBuild = async() => {
     const child = ChildProcess.spawn('tsc', [], {
         stdio: 'pipe',
         shell: true,
@@ -160,20 +205,13 @@ const runBuild = async(build) => {
     child.stdout.on('data', console.log);
     child.stderr.on('data', console.error);
 
-    const watch = (eventType, filename) => {
-        if (!eventType === 'change') return;
-        if (filename && filename.endsWith('.ts')) {
-            console.log('Change detected in server-functions folder! Rebuilding...');
-            runBuild(build);
-        }
-    }
 
     if (!watching.includes(path.resolve(__dirname, '../server-functions'))) {
-        fs.watch(path.resolve(__dirname, '../server-functions'), watch);
+        watchDir(path.resolve(__dirname, '../server-functions'), watchDir);
         watching.push(path.resolve(__dirname, '../server-functions'));
     }
 
-    const { ignore: globalIgnore, minify, submodules, streams, buildDir } = build;
+    const { ignore: globalIgnore, minify, streams, buildDir } = build;
 
     if (!streams) {
         console.error('No streams defined! Aborting build...');
@@ -183,11 +221,17 @@ const runBuild = async(build) => {
         console.log(JSON.stringify({
             ...build,
             streams: {
-                folder: './src (or any other folder)',
-                type: 'js (or css)',
-                priority: ['index.js', 'main.js', '(any other files you want to be loaded first in order)'],
-                ignore: ['test.js', '(any other files you want to ignore)'],
-                ts: '(true or false) - if true, will run "tsc" in the folder before writing to the stream'
+                "stream.js": {
+                    folder: './src (or any other folder)',
+                    priority: ['index.js', 'main.js', '(any other files you want to be loaded first in order)'],
+                    ignore: ['test.js', '(any other files you want to ignore)'],
+                    files: [
+                        "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js // will load this file from the internet",
+                        "../static/js/main.js // will only load this file if it exists",
+                        "[ts]../static/js/submodule // this will run tsc in this directory. tsconfig.json is required and must have an outFile property!",
+                        "../static/js/subfolder // this will load all files in this folder, prioritized by subdirectories and then alphabetically"
+                    ]
+                }
             }
         }));
 
@@ -195,114 +239,88 @@ const runBuild = async(build) => {
     }
 
     const fileStreams = Object.keys(streams).reduce((acc, cur) => {
-        acc[cur] = fs.createWriteStream(path.resolve(__dirname, buildDir, cur + '.' + streams[cur].type));
+        acc[cur] = fs.createWriteStream(path.resolve(__dirname, buildDir, cur));
         return acc;
     }, {});
+
 
     if (!fs.existsSync(path.resolve(__dirname, buildDir))) {
         fs.mkdirSync(path.resolve(__dirname, buildDir));
     }
 
     for (const [name, file] of Object.entries(streams)) {
-        const { folder, type, priority, ignore, ts } = file;
-
-        const dir = path.resolve(__dirname, folder);
-
-        const watch = (event, filename) => {
-            console.log(event, filename);
-            if (ignore && ignore.indexOf(filename) !== -1) return;
-            // if file is saved
-            if (event === 'change') {
-                console.log('Writing', filename, 'to', name + '.' + type, '...');
-
-                runBuild(build);
-            }
-        }
-
-        if (!watching.includes(dir)) {
-            fs.watch(dir, { recursive: true }, watch);
-            watching.push(dir);
-        }
+        const type = path.extname(name).slice(1);
+        const { priority, ignore, files } = file;
 
         const fileStream = fileStreams[name];
 
-        const files = mapDirectory(dir, type, priority);
+
+        if (files) {
+            for (let f of files) {
+                if (f.includes('http')) {
+                    const data = await getDependency(f);
+                    fileStream.write(data);
+                    fileStream.write(delimiters[type]);
+                    continue;
+                }
+                const ts = f.startsWith('[ts]');
+
+                if (fs.statSync(path.resolve(__dirname, f.replace('[ts]', ''))).isDirectory()) {
+                    watchDir(path.resolve(__dirname, f.replace('[ts]', '')), watchDir);
+                    // format: [ts]../path/to/dir
+                    if (ts) {
+                        const p = await runTs(path.resolve(__dirname, f.replace('[ts]', '')));
+                        const content = fs.readFileSync(p);
+                        fileStream.write(content);
+                        fileStream.write(delimiters[type]);
+
+                        continue;
+                    }
+
+                    const files = mapDirectory(path.resolve(__dirname, f.replace('[ts]', '')), type, priority);
+                    
+                    for (const f of files) {
+                        if (ignore && ignore.indexOf(f.name) !== -1) continue;
+                        if (globalIgnore && globalIgnore.indexOf(f.name) !== -1) continue;
+
+                        const content = fs.readFileSync(path.resolve(__dirname, f.path.replace('[ts]', '')));
+                        fileStream.write(content);
+                        fileStream.write('\n');
+                    }
+                } else {
+                    if (f.endsWith('.scss')) {
+                        const { css } = sass.compile(path.resolve(__dirname, f.replace('[ts]'), ''), {
+                            outputStyle: 'compressed'
+                        });
+                        f = f.replace('.scss', '.css');
+
+                        fileStream.write(css);
+                        fileStream.write(delimiters[type]);
+                        continue;
+                    }
 
 
-        for (const file of files) {
-            if (ignore && ignore.indexOf(file.name) !== -1) continue;
-            if (globalIgnore && globalIgnore.indexOf(file.name) !== -1) continue;
-
-            console.log('Writing', file.name + file.ext, 'to', name + '.' + type, '...');
-
-            if (ts) {
-                const path = await runTs(dir);
-                const content = fs.readFileSync(path);
-                fileStream.write(content);
-                fileStream.write(delimiters[type]);
-
-                continue;
+                    if (fs.existsSync(path.resolve(__dirname, f.replace('[ts]', '')))) {
+                        const content = fs.readFileSync(path.resolve(__dirname, f.replace('[ts]', '')));
+                        fileStream.write(content);
+                        fileStream.write(delimiters[type]);
+                    } else {
+                        console.error(`File ${f.replace('[ts]', '')} does not exist!`);
+                    }
+                }
             }
-
-            const content = fs.readFileSync(file.path);
-            fileStream.write(content);
-            fileStream.write(delimiters[type]);
         }
     }
-
-    if (submodules) {
-        for (const [name, submodule] of Object.entries(submodules)) {
-            const folder = path.resolve(__dirname, name);
-
-            if (!fs.existsSync(folder)) {
-                console.error(`Submodule ${name} does not exist!`);
-                continue;
-            }
-
-            const { ts, stream, type, ignore, priority } = submodule;
-
-            if (!stream) {
-                await runTs(folder);
-                continue;
-            }
-
-            // console.log(path.resolve(__dirname, buildDir, name + '.' + type));
-
-            const fileStream = fileStreams[stream];
-
-            if (ts) {
-                // console.log('is it this fucking thing?')
-                const filePath = await runTs(folder);
-                // console.log('path:', filePath);
-                const content = fs.readFileSync(path.resolve(__dirname, filePath));
-
-                fileStream.write(content);
-                fileStream.write(delimiters[type]);
-                continue;
-            }
-
-
-            const files = mapDirectory(folder, type, priority);
-
-            files.forEach((file) => {
-                if (ignore && ignore.indexOf(file.name) !== -1) return;
-                if (globalIgnore && globalIgnore.indexOf(file.name) !== -1) return;
-
-                const content = fs.readFileSync(file.path);
-
-                fileStream.write(content);
-                fileStream.write(delimiters[type]);
-            });
-        }
-    }
-
 
     if (minify) {
         Object.keys(build.streams).forEach((stream) => {
-            const streamPath = path.resolve(__dirname, buildDir, stream + '.' + build.streams[stream].type);
+            const streamPath = path.resolve(__dirname, buildDir, stream);
 
             let content = fs.readFileSync(streamPath, 'utf8');
             const ext = path.extname(streamPath);
+
+            stream = stream.replace(ext, '.min' + ext);
+            console.log('Minifying', stream, '...');
 
             switch (ext) {
                 case '.js':
@@ -311,23 +329,26 @@ const runBuild = async(build) => {
                             drop_console: true
                         }
                     }).code;
-                    fs.writeFileSync(path.resolve(__dirname, buildDir, stream + '.min' + ext), content);
+                    fs.writeFileSync(path.resolve(__dirname, buildDir, stream), content);
                     break;
                 case '.css':
                     postcss([autoprefixer, cssnano])
                         .process(content, { from: undefined })
                         .then((result) => {
                             content = result.css;
-                            fs.writeFileSync(path.resolve(__dirname, buildDir, stream + '.min' + ext), content);
+                            fs.writeFileSync(path.resolve(__dirname, buildDir, stream), content);
                         });
                     break;
             }
         });
-
     }
+
+
+
+    console.log('Build complete!');
 };
 
-runBuild(build);
+runBuild();
 
 process.on('data', (data) => {
     data = data.toString().trim().replace('\r', '');
@@ -339,3 +360,7 @@ process.on('data', (data) => {
             break;
     }
 });
+
+
+// fs.watch(path.resolve(__dirname), runBuild);
+// fs.watch(path.resolve(__dirname, './build.json'), runBuild);

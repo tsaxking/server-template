@@ -27,6 +27,16 @@ exports.openAllInFolder = exports.openAllInFolderSync = exports.fileStream = exp
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const uuid_1 = require("uuid");
+const pseudo_build_1 = require("../build/pseudo-build");
+const node_html_parser_1 = require("node-html-parser");
+const v3_1 = require("node-html-constructor/versions/v3");
+// console.log(build);
+/**
+ * Description placeholder
+ *
+ * @type {*}
+ */
+const env = process.argv[2] || 'dev';
 /**
  * Gets a json from the jsons folder
  *
@@ -42,9 +52,13 @@ const uuid_1 = require("uuid");
  *
  */
 function getJSONSync(file) {
-    if (file.startsWith('/'))
-        file = '.' + file;
-    const p = path.resolve(__dirname, '../jsons', file + '.json');
+    let p;
+    if (file.includes('/') || file.includes('\\')) {
+        p = file;
+    }
+    else
+        p = path.resolve(__dirname, '../jsons', file + '.json');
+    p = path.resolve(__dirname, p);
     if (!fs.existsSync(p)) {
         return false;
     }
@@ -52,7 +66,7 @@ function getJSONSync(file) {
     // remove all /* */ comments
     content = content.replace(/\/\*[\s\S]*?\*\//g, '');
     // remove all // comments
-    content = content.replace(/\/\/.*/g, '');
+    content = content.replace(/\/\/ .*/g, '');
     try {
         return JSON.parse(content);
     }
@@ -77,9 +91,13 @@ exports.getJSONSync = getJSONSync;
  */
 function getJSON(file) {
     return new Promise((res, rej) => {
-        if (file.startsWith('/'))
-            file = '.' + file;
-        const p = path.resolve(__dirname, '../jsons', file + '.json');
+        let p;
+        if (file.includes('/') || file.includes('\\')) {
+            p = file;
+        }
+        else
+            p = path.resolve(__dirname, '../jsons', file + '.json');
+        p = path.resolve(__dirname, p);
         if (!fs.existsSync(p)) {
             return res(false);
         }
@@ -89,7 +107,7 @@ function getJSON(file) {
             // remove all /* */ comments
             content = content.replace(/\/\*[\s\S]*?\*\//g, '');
             // remove all // comments
-            content = content.replace(/\/\/.*/g, '');
+            content = content.replace(/\/\/ .*/g, '');
             try {
                 res(JSON.parse(content));
             }
@@ -113,9 +131,13 @@ exports.getJSON = getJSON;
  *
  */
 function saveJSONSync(file, data) {
-    if (file.startsWith('/'))
-        file = '.' + file;
-    const p = path.resolve(__dirname, '../jsons', file + '.json');
+    let p;
+    if (file.includes('/') || file.includes('\\')) {
+        p = file;
+    }
+    else
+        p = path.resolve(__dirname, '../jsons', file + '.json');
+    p = path.resolve(__dirname, p);
     try {
         JSON.stringify(data);
     }
@@ -140,9 +162,13 @@ exports.saveJSONSync = saveJSONSync;
  */
 function saveJSON(file, data) {
     return new Promise((res, rej) => {
-        if (file.startsWith('/'))
-            file = '.' + file;
-        const p = path.resolve(__dirname, '../jsons', file + '.json');
+        let p;
+        if (file.includes('/') || file.includes('\\')) {
+            p = file;
+        }
+        else
+            p = path.resolve('../jsons', file + '.json');
+        p = path.resolve(__dirname, p);
         try {
             JSON.stringify(data);
         }
@@ -159,21 +185,92 @@ function saveJSON(file, data) {
 }
 exports.saveJSON = saveJSON;
 /**
+ * Builds for development only (Caches)
+ *
+ * @type {*}
+ */
+let builds = (0, pseudo_build_1.build)();
+const buildJSON = getJSONSync('../build/build.json');
+/**
+ * Parses the html and adds the builds
+ *
+ * @param {string} template
+ * @returns {*}
+ */
+const runBuilds = (template) => {
+    const root = (0, node_html_parser_1.parse)(template);
+    if (env === 'production') {
+        root.querySelectorAll('.developer').forEach(d => d.remove());
+        root.querySelectorAll('script').forEach(s => {
+            if (!s.attributes.src)
+                return s.remove();
+            const ext = path.extname(s.attributes.src);
+            const name = path.basename(s.attributes.src, ext);
+            s.setAttribute('src', `../static//build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+        });
+        root.querySelectorAll('link').forEach(l => {
+            if (!l.attributes.href)
+                return l.remove();
+            const ext = path.extname(l.attributes.href);
+            const name = path.basename(l.attributes.href, ext);
+            l.setAttribute('href', `../static/build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+        });
+    }
+    else {
+        const insertBefore = (parent, child, before) => {
+            parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
+        };
+        Object.keys(builds).forEach(script => {
+            if (script.endsWith('.js')) {
+                const scriptTag = root.querySelector(`script[src="${script}"]`);
+                if (!scriptTag)
+                    return;
+                builds[script].forEach(build => {
+                    const newScript = (0, node_html_parser_1.parse)(`<script src="${build.replace('\\', '')}"></script>`);
+                    insertBefore(scriptTag.parentNode, newScript, scriptTag);
+                });
+                scriptTag.remove();
+            }
+            else if (script.endsWith('.css')) {
+                const linkTag = root.querySelector(`link[href="${script}"]`);
+                if (!linkTag)
+                    return;
+                builds[script].forEach(build => {
+                    const newLink = (0, node_html_parser_1.parse)(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
+                    insertBefore(linkTag.parentNode, newLink, linkTag);
+                });
+                linkTag.remove();
+            }
+        });
+    }
+    return root.toString();
+};
+const templates = new Map();
+/**
  * Gets an html template from the templates folder
  *
  * @export
  * @param {string} file the file name with no extension (ex '/index')
  * @returns {string|boolean} false if there is an error, otherwise the html
  */
-function getTemplateSync(file) {
-    if (file.startsWith('/'))
-        file = '.' + file;
-    const p = path.resolve(__dirname, '../templates', file + '.html');
+function getTemplateSync(file, options) {
+    if (templates.has(file)) {
+        return templates.get(file);
+    }
+    let p;
+    if (file.includes('/') || file.includes('\\')) {
+        p = file;
+    }
+    else
+        p = path.resolve(__dirname, '../templates', file + '.html');
+    p = path.resolve(__dirname, p);
     if (!fs.existsSync(p)) {
         return false;
     }
-    const data = fs.readFileSync(p, 'utf8');
-    return data;
+    let data = fs.readFileSync(p, 'utf8');
+    data = runBuilds(data);
+    templates.set(file, data);
+    return options ? (0, v3_1.render)(data, options) : data;
 }
 exports.getTemplateSync = getTemplateSync;
 ;
@@ -184,18 +281,27 @@ exports.getTemplateSync = getTemplateSync;
  * @param {string} file the file name with no extension (ex '/index')
  * @returns {Promise<string|boolean>} false if there is an error, otherwise the html
  */
-function getTemplate(file) {
+function getTemplate(file, options) {
     return new Promise((res, rej) => {
-        if (file.startsWith('/'))
-            file = '.' + file;
-        const p = path.resolve(__dirname, '../templates', file + '.html');
+        if (templates.has(file)) {
+            return res(templates.get(file));
+        }
+        let p;
+        if (file.includes('/') || file.includes('\\')) {
+            p = file;
+        }
+        else
+            p = path.resolve(__dirname, '../templates', file + '.html');
+        p = path.resolve(__dirname, p);
         if (!fs.existsSync(p)) {
             return res(false);
         }
         fs.readFile(p, 'utf8', (err, data) => {
             if (err)
                 return rej(err);
-            res(data);
+            data = runBuilds(data);
+            templates.set(file, data);
+            res(options ? (0, v3_1.render)(data, options) : data);
         });
     });
 }
@@ -209,9 +315,13 @@ exports.getTemplate = getTemplate;
  * @returns {boolean} whether the file was saved successfully
  */
 function saveTemplateSync(file, data) {
-    if (file.startsWith('/'))
-        file = '.' + file;
-    const p = path.resolve(__dirname, '../templates', file + '.html');
+    let p;
+    if (file.includes('/') || file.includes('\\')) {
+        p = file;
+    }
+    else
+        p = path.resolve(__dirname, '../templates', file + '.html');
+    p = path.resolve(__dirname, p);
     fs.writeFileSync(p, data, 'utf8');
     return true;
 }
@@ -226,9 +336,13 @@ exports.saveTemplateSync = saveTemplateSync;
  */
 function saveTemplate(file, data) {
     return new Promise((res, rej) => {
-        if (file.startsWith('/'))
-            file = '.' + file;
-        const p = path.resolve(__dirname, '../templates', file);
+        let p;
+        if (file.includes('/') || file.includes('\\')) {
+            p = file;
+        }
+        else
+            p = path.resolve(__dirname, '../templates', file + '.html');
+        p = path.resolve(__dirname, p);
         fs.writeFile(p, data, 'utf8', err => {
             if (err)
                 return rej(err);
@@ -422,7 +536,7 @@ function openAllInFolderSync(dir, cb, options) {
         files.sort((a, b) => {
             if (fs.lstatSync(path.resolve(dir, a)).isDirectory() || fs.lstatSync(path.resolve(dir, b)).isDirectory())
                 return 0;
-            return options.sort(path.resolve(dir, a), path.resolve(dir, b));
+            return options?.sort ? options.sort(path.resolve(dir, a), path.resolve(dir, b)) : 0 || 0;
         });
     }
     files.forEach(file => {

@@ -1,0 +1,45 @@
+{
+    "ignore": [
+        // currently only specific files
+        // will eventually be able to do folders
+    ],
+    "minify": true,
+    "streams": {
+        "style.css": {
+            // "ignore": [], // ignore files from this stream
+            // "priority": [], // put these files at the top of this stream
+            "files": [
+                // dependencies
+                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css",
+                // entire folder
+                "../static/css/",
+                // can do scss
+                "../static/scss/style.scss"
+
+                // can also do specific files
+            ]
+        },
+        "script.js": {
+            // "ignore": [], // ignore files from this stream
+            // "priority": [], // put these files at the top of this stream
+            "files": [
+                // some dependencies
+                "https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js",
+                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.min.js",
+
+                // ts folders (have their own tsconfig.json)
+                "[ts]../static/js/classes/canvas",
+                "[ts]../static/js/classes/color",
+                "[ts]../static/js/classes/custom-bootstrap/src",
+                "[ts]../static/js/classes/tables-js/2.0",
+
+                // all js files in these folders (no ts)
+                "../static/js/top",
+                "../static/js/bottom"
+
+                // specific files
+            ]
+        }
+    },
+    "buildDir": "../static/build/"
+}

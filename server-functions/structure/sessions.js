@@ -73,7 +73,7 @@ class Session {
         });
     }
     static fromSessObj(s) {
-        const session = new Session(null, null);
+        const session = new Session();
         session.ip = s.ip;
         session.id = s.id;
         session.latestActivity = s.latestActivity;
@@ -100,6 +100,8 @@ class Session {
     constructor(req, res) {
         if (req)
             this.ip = (0, request_ip_1.getClientIp)(req);
+        else
+            this.ip = 'unknown';
         this.id = (0, uuid_1.v4)();
         if (res)
             res.cookie('ssid', this.id, {
@@ -114,7 +116,7 @@ class Session {
         this.account = account;
     }
     signOut() {
-        this.account = null;
+        delete this.account;
     }
     destroy() {
         Session.removeSession(this);
