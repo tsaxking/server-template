@@ -123,26 +123,12 @@ let gitClient;
 const spawnGitClient = (...args) => {
     args = args.join(' ');
     // split by spaces unless the space is in single or double quotes
-    args = args.split(' ').reduce((acc, cur) => {
-        if (cur.startsWith('"') || cur.startsWith("'")) {
-            acc.inQuotes = true;
-            acc.string += cur + ' ';
-        } else if (cur.endsWith('"') || cur.endsWith("'")) {
-            acc.inQuotes = false;
-            acc.string += cur + ' ';
-            acc.array.push(acc.string.trim());
-            acc.string = '';
-        } else if (acc.inQuotes) {
-            acc.string += cur + ' ';
-        } else {
-            acc.array.push(cur);
-        }
-        return acc;
-    }, {
-        array: [],
-        string: '',
-        inQuotes: false
-    }).array;
+    // so git commit -m "my message" will be:
+    // ['git', 'commit', '-m', '"my message"']
+    // instead of:
+    // ['git', 'commit', '-m', 'my', 'message']
+
+    args = args.match(/(?:[^\s"]+|"[^"]*")+/g);
 
     gitClient = spawnChild({
         command: 'git',
