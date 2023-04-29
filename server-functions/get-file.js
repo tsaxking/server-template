@@ -191,6 +191,7 @@ exports.saveJSON = saveJSON;
  */
 let builds = (0, pseudo_build_1.build)();
 const buildJSON = getJSONSync('../build/build.json');
+!buildJSON.buildDir.endsWith('/') && (buildJSON.buildDir += '/'); // make sure it ends with a slash 
 /**
  * Parses the html and adds the builds
  *
@@ -199,49 +200,63 @@ const buildJSON = getJSONSync('../build/build.json');
  */
 const runBuilds = (template) => {
     const root = (0, node_html_parser_1.parse)(template);
-    if (env === 'production') {
-        root.querySelectorAll('.developer').forEach(d => d.remove());
-        root.querySelectorAll('script').forEach(s => {
-            if (!s.attributes.src)
-                return s.remove();
-            const ext = path.extname(s.attributes.src);
-            const name = path.basename(s.attributes.src, ext);
-            s.setAttribute('src', `../static//build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
-        });
-        root.querySelectorAll('link').forEach(l => {
-            if (!l.attributes.href)
-                return l.remove();
-            const ext = path.extname(l.attributes.href);
-            const name = path.basename(l.attributes.href, ext);
-            l.setAttribute('href', `../static/build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
-        });
-    }
-    else {
-        const insertBefore = (parent, child, before) => {
-            parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
-        };
-        Object.keys(builds).forEach(script => {
-            if (script.endsWith('.js')) {
-                const scriptTag = root.querySelector(`script[src="${script}"]`);
-                if (!scriptTag)
-                    return;
-                builds[script].forEach(build => {
-                    const newScript = (0, node_html_parser_1.parse)(`<script src="${build.replace('\\', '')}"></script>`);
-                    insertBefore(scriptTag.parentNode, newScript, scriptTag);
-                });
-                scriptTag.remove();
-            }
-            else if (script.endsWith('.css')) {
-                const linkTag = root.querySelector(`link[href="${script}"]`);
-                if (!linkTag)
-                    return;
-                builds[script].forEach(build => {
-                    const newLink = (0, node_html_parser_1.parse)(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
-                    insertBefore(linkTag.parentNode, newLink, linkTag);
-                });
-                linkTag.remove();
-            }
-        });
+    const insertBefore = (parent, child, before) => {
+        parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
+    };
+    switch (env) {
+        case 'prod': // production (combine and minify)
+            root.querySelectorAll('.developer').forEach(d => d.remove());
+            root.querySelectorAll('script').forEach(s => {
+                if (!s.attributes.src)
+                    return s.remove();
+                const ext = path.extname(s.attributes.src);
+                const name = path.basename(s.attributes.src, ext);
+                s.setAttribute('src', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            });
+            root.querySelectorAll('link').forEach(l => {
+                if (!l.attributes.href)
+                    return l.remove();
+                const ext = path.extname(l.attributes.href);
+                const name = path.basename(l.attributes.href, ext);
+                l.setAttribute('href', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            });
+            break;
+        case 'test': // testing (combine but do not minify)
+            root.querySelectorAll('.developer').forEach(d => d.remove());
+            root.querySelectorAll('script').forEach(s => {
+                if (!s.attributes.src)
+                    return s.remove();
+                s.setAttribute('src', `${buildJSON.buildDir}${s.attributes.src}`);
+            });
+            root.querySelectorAll('link').forEach(l => {
+                if (!l.attributes.href)
+                    return l.remove();
+                l.setAttribute('href', `${buildJSON.buildDir}${s.attributes.src}`);
+            });
+            break;
+        case 'dev': // development (do not combine files)
+            Object.keys(builds).forEach(script => {
+                if (script.endsWith('.js')) {
+                    const scriptTag = root.querySelector(`script[src="${script}"]`);
+                    if (!scriptTag)
+                        return;
+                    builds[script].forEach(build => {
+                        const newScript = (0, node_html_parser_1.parse)(`<script src="${build.replace('\\', '')}"></script>`);
+                        insertBefore(scriptTag.parentNode, newScript, scriptTag);
+                    });
+                    scriptTag.remove();
+                }
+                else if (script.endsWith('.css')) {
+                    const linkTag = root.querySelector(`link[href="${script}"]`);
+                    if (!linkTag)
+                        return;
+                    builds[script].forEach(build => {
+                        const newLink = (0, node_html_parser_1.parse)(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
+                        insertBefore(linkTag.parentNode, newLink, linkTag);
+                    });
+                    linkTag.remove();
+                }
+            });
     }
     return root.toString();
 };

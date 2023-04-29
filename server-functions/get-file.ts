@@ -180,53 +180,69 @@ const buildJSON = getJSONSync('../build/build.json');
  */
 const runBuilds = (template: string) => {
     const root = parse(template);
+    const insertBefore = (parent: HTMLElement, child: HTMLElement, before: HTMLElement) => {
+        parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
+    }
 
-    if (env === 'production') {
-        root.querySelectorAll('.developer').forEach(d => d.remove());
+    switch (env) {
+        case 'prod': // production (combine and minify)
+            root.querySelectorAll('.developer').forEach(d => d.remove());
 
-        root.querySelectorAll('script').forEach(s => {
-            if (!s.attributes.src) return s.remove();
+            root.querySelectorAll('script').forEach(s => {
+                if (!s.attributes.src) return s.remove();
 
-            const ext = path.extname(s.attributes.src);
-            const name = path.basename(s.attributes.src, ext);
+                const ext = path.extname(s.attributes.src);
+                const name = path.basename(s.attributes.src, ext);
 
-            s.setAttribute('src', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
-        });
+                s.setAttribute('src', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            });
 
-        root.querySelectorAll('link').forEach(l => {
-            if (!l.attributes.href) return l.remove();
+            root.querySelectorAll('link').forEach(l => {
+                if (!l.attributes.href) return l.remove();
 
-            const ext = path.extname(l.attributes.href);
-            const name = path.basename(l.attributes.href, ext);
+                const ext = path.extname(l.attributes.href);
+                const name = path.basename(l.attributes.href, ext);
 
-            l.setAttribute('href', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
-        });
-    } else {
-        const insertBefore = (parent: HTMLElement, child: HTMLElement, before: HTMLElement) => {
-            parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
-        }
+                l.setAttribute('href', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            });
+            break;
+        case 'test': // testing (combine but do not minify)
+            root.querySelectorAll('.developer').forEach(d => d.remove());
 
-        Object.keys(builds).forEach(script => {
-            if (script.endsWith('.js')) {
-                const scriptTag = root.querySelector(`script[src="${script}"]`);
-                if (!scriptTag) return;
+            root.querySelectorAll('script').forEach(s => {
+                if (!s.attributes.src) return s.remove();
 
-                (builds[script] as string[]).forEach(build => {
-                    const newScript = parse(`<script src="${build.replace('\\', '')}"></script>`);
-                    insertBefore(scriptTag.parentNode, newScript, scriptTag);
-                });
-                scriptTag.remove();
-            } else if (script.endsWith('.css')) {
-                const linkTag = root.querySelector(`link[href="${script}"]`);
-                if (!linkTag) return;
+                s.setAttribute('src', `${buildJSON.buildDir}${s.attributes.src}`);
+            });
 
-                (builds[script] as string[]).forEach(build => {
-                    const newLink = parse(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
-                    insertBefore(linkTag.parentNode, newLink, linkTag);
-                });
-                linkTag.remove();
-            }
-        });
+            root.querySelectorAll('link').forEach(l => {
+                if (!l.attributes.href) return l.remove();
+
+                l.setAttribute('href', `${buildJSON.buildDir}${s.attributes.src}`);
+            });
+            break;
+        case 'dev': // development (do not combine files)
+            Object.keys(builds).forEach(script => {
+                if (script.endsWith('.js')) {
+                    const scriptTag = root.querySelector(`script[src="${script}"]`);
+                    if (!scriptTag) return;
+
+                    (builds[script] as string[]).forEach(build => {
+                        const newScript = parse(`<script src="${build.replace('\\', '')}"></script>`);
+                        insertBefore(scriptTag.parentNode, newScript, scriptTag);
+                    });
+                    scriptTag.remove();
+                } else if (script.endsWith('.css')) {
+                    const linkTag = root.querySelector(`link[href="${script}"]`);
+                    if (!linkTag) return;
+
+                    (builds[script] as string[]).forEach(build => {
+                        const newLink = parse(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
+                        insertBefore(linkTag.parentNode, newLink, linkTag);
+                    });
+                    linkTag.remove();
+                }
+            });
     }
     return root.toString();
 }

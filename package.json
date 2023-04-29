@@ -9,7 +9,8 @@
     "start": "node main.js prod",
     "build": "node ./build/build.js",
     "update": "npm i && node ./build/server-update.js",
-    "test-env": "node ./test-env/test.js"
+    "test-env": "node ./test-env/test.js",
+    "debug": "node ./test-env/debugger.js"
   },
   "repository": {
     "type": "git",

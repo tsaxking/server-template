@@ -14,7 +14,8 @@ history/
 uploads/
 db/
 static/build/
-static/scss/*.css
+*/scss/*.css
+*/logs.csv
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

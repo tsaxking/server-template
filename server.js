@@ -190,7 +190,7 @@ app.use((req, res, next) => {
     const csvObj = {
         date: Date.now(),
         duration: Date.now() - req.start,
-        ip: req.sessions.ip,
+        ip: req.session.ip,
         method: req.method,
         url: req.originalUrl,
         status: res.statusCode,
@@ -209,7 +209,7 @@ app.use((req, res, next) => {
 
     logCache.push(csvObj);
 
-    ObjectsToCsv([csvObj]).toDisk('./logs.csv', { append: true });
+    new ObjectsToCsv([csvObj]).toDisk('./logs.csv', { append: true });
 });
 
 

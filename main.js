@@ -2,9 +2,9 @@ const arguments = process.argv.slice(2);
 console.log('Arguments:', arguments.map(a => '\x1b[35m' + a + '\x1b[0m').join(' '));
 const [env, ...args] = arguments;
 const modes = {
-    test: {
-        type: 'test',
-        description: 'In test mode, only ts is rendered. This is the mode you should use when debugging',
+    dev: {
+        type: 'development',
+        description: 'In dev mode, only ts is rendered. This is the mode you should use when debugging',
         command: 'npm test',
         quickInfo: [
             'Static Files are \x1b[31mnot\x1b[0m combined or minified',
@@ -13,8 +13,8 @@ const modes = {
             'Browser window is \x1b[32mspawned\x1b[0m'
         ]
     },
-    dev: {
-        type: 'development',
+    test: {
+        type: 'testing',
         description: 'This environment is similar to the production environment, but it will still auto login and spawn a browser window.',
         command: 'npm run dev',
         quickInfo: [
