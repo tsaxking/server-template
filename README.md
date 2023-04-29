@@ -50,6 +50,8 @@ Here is a small summary of what is included in this template
 - [x] Sessions with custom session class
 - [x] [socket.io](https://socket.io/) support
 - [x] [nodemailer](https://nodemailer.com/about/) support
+- [x] On start, runs npm i
+- [x] Spawns 4 processes: Update, Build, Git, and Server
 
 ### Client Side:
 - [x] [TypeScript](https://www.typescriptlang.org/) support
