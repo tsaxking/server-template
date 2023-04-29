@@ -1,7 +1,8 @@
 {
     "ignore": [
-        // currently only specific files
-        // will eventually be able to do folders
+        // same format as .gitignore
+        // "*.css"
+        // if files are ignored, build will create ./ignore-list.txt
     ],
     "minify": true,
     "streams": {

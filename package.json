@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/tsaxking/template#readme",
   "dependencies": {
+    "@gerhobbelt/gitignore-parser": "^0.2.0-9",
     "autoprefixer": "^10.4.14",
     "axios": "^1.4.0",
     "child_process": "^1.0.2",

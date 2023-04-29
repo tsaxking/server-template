@@ -7,13 +7,31 @@ const autoprefixer = require('autoprefixer');
 const ChildProcess = require('child_process');
 const axios = require('axios');
 const sass = require('sass');
+const { compile: ignoreCompiler } = require('@gerhobbelt/gitignore-parser');
 
-// const globalWatchIgnore = [];
-// fs.watch(path.resolve(__dirname, '../'), (event, filename) => {
-//     if (event === 'rename' && filename.endsWith('.js') && !globalWatchIgnore.includes(filename)) {
-//         globalWatchIgnore.push(filename);
-//     }
-// });
+
+const ignoreList = [];
+
+/**
+ * 
+ * @param {String[]} ignoreArr 
+ * @param {String} file 
+ */
+const ignoreTest = (ignoreArr, file) => {
+    // test if file starts with C:/ or C:\\ or some equivalent
+    const topLevelTest = /^[a-zA-Z]:\\/.test(file) || /^[a-zA-Z]:\//.test(file);
+
+    file = path.relative(__dirname, topLevelTest ? file : path.resolve(__dirname, file));
+    // console.log('Testing ignore...', file);
+
+    const gitignore = ignoreCompiler(ignoreArr.join('\n'));
+    const test = gitignore.denies(file);
+    if (test) {
+        console.log('Ignored:', file);
+        ignoreList.push(file);
+    }
+    return test;
+}
 
 
 let watchDirs = [];
@@ -257,6 +275,8 @@ const runBuild = async() => {
 
         if (files) {
             for (let f of files) {
+                if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
+                if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
                 if (f.includes('http')) {
                     const data = await getDependency(f);
                     fileStream.write(data);
@@ -270,6 +290,10 @@ const runBuild = async() => {
                     // format: [ts]../path/to/dir
                     if (ts) {
                         const p = await runTs(path.resolve(__dirname, f.replace('[ts]', '')));
+
+                        if (globalIgnore && ignoreTest(globalIgnore, p)) continue;
+                        if (ignore && ignoreTest(ignore, p)) continue;
+
                         const content = fs.readFileSync(p);
                         fileStream.write(content);
                         fileStream.write(delimiters[type]);
@@ -280,8 +304,8 @@ const runBuild = async() => {
                     const files = mapDirectory(path.resolve(__dirname, f.replace('[ts]', '')), type, priority);
                     
                     for (const f of files) {
-                        if (ignore && ignore.indexOf(f.name) !== -1) continue;
-                        if (globalIgnore && globalIgnore.indexOf(f.name) !== -1) continue;
+                        if (ignore && ignoreTest(ignore, f.path.replace('[ts]', ''))) continue;
+                        if (globalIgnore && ignoreTest(globalIgnore, f.path.replace('[ts]', ''))) continue;
 
                         const content = fs.readFileSync(path.resolve(__dirname, f.path.replace('[ts]', '')));
                         fileStream.write(content);
@@ -293,6 +317,9 @@ const runBuild = async() => {
                             outputStyle: 'compressed'
                         });
                         f = f.replace('.scss', '.css');
+
+                        if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
+                        if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
 
                         fileStream.write(css);
                         fileStream.write(delimiters[type]);
@@ -343,7 +370,10 @@ const runBuild = async() => {
         });
     }
 
-
+    if (ignoreList.length) fs.writeFileSync(path.resolve(__dirname, './ignore-list.txt'), ignoreList.join('\n'));
+    else if (fs.existsSync(path.resolve(__dirname, './ignore-list.txt'))) {
+        fs.unlinkSync(path.resolve(__dirname, './ignore-list.txt'));
+    }
 
     console.log('Build complete!');
 };
