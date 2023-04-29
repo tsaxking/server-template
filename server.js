@@ -8,7 +8,7 @@ const { getClientIp } = require('request-ip');
 const { Session } = require('./server-functions/structure/sessions');
 
 require('dotenv').config();
-const { PORT } = process.env;
+const { PORT, DOMAIN } = process.env;
 
 const [,, mode, ...args] = process.argv;
 
@@ -228,8 +228,6 @@ setTimeout(() => {
 
 
 server.listen(PORT, () => {
-    const domain = mode === 'production' ? 'https://www.{{example}}.com' : 'http://localhost';
-
     console.log('------------------------------------------------');
-    console.log(`Listening on port \x1b[35m${domain}:${PORT}...\x1b[0m`);
+    console.log(`Listening on port \x1b[35m${DOMAIN}...\x1b[0m`);
 });

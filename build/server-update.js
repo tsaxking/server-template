@@ -184,9 +184,12 @@ const makeFilesAndFolders = async() => {
         "/archive",
         "/db"
     ];
+
+    const port = randomPort();
+
     const files = [{
         name: "/.env",
-        content: `PORT='${randomPort()}'` // random number between 1000 and 9999
+        content: `PORT='${port}'\nDOMAIN='http://localhost:${port}'` // random number between 1000 and 9999
     }, {
         name: "/history/manifest.txt",
         content: JSON.stringify({
