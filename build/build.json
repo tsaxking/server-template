@@ -10,12 +10,11 @@
             // "priority": [], // put these files at the top of this stream
             "files": [
                 // dependencies
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css",
+                // "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css",
                 // entire folder
-                "../static/css/",
+                "../static/css/" // ,
                 // can do scss
-                "../static/scss/style.scss"
-
+                // "../static/scss/style.scss"
                 // can also do specific files
             ]
         },
@@ -24,8 +23,8 @@
             // "priority": [], // put these files at the top of this stream
             "files": [
                 // some dependencies
-                "https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js",
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.min.js",
+                // "https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js",
+                // "https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.min.js",
 
                 // ts folders (have their own tsconfig.json)
                 "[ts]../static/js/classes/canvas",

@@ -170,6 +170,7 @@ export function saveJSON(file: string, data: any): Promise<boolean> {
  */
 let builds: any = build();
 const buildJSON = getJSONSync('../build/build.json');
+!buildJSON.buildDir.endsWith('/') && (buildJSON.buildDir += '/'); // make sure it ends with a slash 
 
 /**
  * Parses the html and adds the builds
@@ -189,7 +190,7 @@ const runBuilds = (template: string) => {
             const ext = path.extname(s.attributes.src);
             const name = path.basename(s.attributes.src, ext);
 
-            s.setAttribute('src', `../static//build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            s.setAttribute('src', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
         });
 
         root.querySelectorAll('link').forEach(l => {
@@ -198,7 +199,7 @@ const runBuilds = (template: string) => {
             const ext = path.extname(l.attributes.href);
             const name = path.basename(l.attributes.href, ext);
 
-            l.setAttribute('href', `../static/build/${buildJSON.minify ? name + '.min' + ext : name + ext}`);
+            l.setAttribute('href', `${buildJSON.buildDir}${buildJSON.minify ? name + '.min' + ext : name + ext}`);
         });
     } else {
         const insertBefore = (parent: HTMLElement, child: HTMLElement, before: HTMLElement) => {
