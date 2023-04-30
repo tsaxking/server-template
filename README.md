@@ -53,6 +53,7 @@ Here is a small summary of what is included in this template
 - [x] On start, runs npm i
 - [x] Spawns 4 processes: Update, Build, Git, and Server
 - [x] Logs all requests to ./logs.csv (ignored) and resets them every day at 12am
+- [x] Email and message spam protection
 
 ### Client Side:
 - [x] [TypeScript](https://www.typescriptlang.org/) support

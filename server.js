@@ -7,11 +7,12 @@ const ObjectsToCsv = require('objects-to-csv');
 const { getClientIp } = require('request-ip');
 const { Session } = require('./server-functions/structure/sessions');
 const builder = require('./server-functions/page-builder');
+const { detectSpam, emailValidation } = require('./server-functions/middleware/spam-detection');
 
 require('dotenv').config();
 const { PORT, DOMAIN } = process.env;
 
-const [,, mode, ...args] = process.argv;
+const [,, env, ...args] = process.argv;
 
 
 const app = express();
@@ -21,6 +22,8 @@ const io = new Server(server);
 
 io.on('connection', (socket) => {
     console.log('a user connected');
+    const s = Session.addSocket(socket);
+    if (!s) return;
     // your socket code here
 
     // ▄▀▀ ▄▀▄ ▄▀▀ █▄▀ ██▀ ▀█▀ ▄▀▀ 
@@ -130,6 +133,27 @@ app.use((req, res, next) => {
 
     next();
 });
+
+
+// spam detection
+app.post(detectSpam(['message', 'name', 'email'], {
+    onSpam: (req, res, next) => {
+        res.json({ error: 'spam' });
+    },
+    onerror: (req, res, next) => {
+        res.json({ error: 'error' });
+    }
+}));
+
+app.post(emailValidation(['email', 'confirmEmail'], {
+    onspam: (req, res, next) => {
+        res.json({ error: 'spam' });
+    },
+    onerror: (req, res, next) => {
+        res.json({ error: 'error' });
+    }
+}));
+
 
 
 

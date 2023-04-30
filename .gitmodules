@@ -1,9 +1,9 @@
-[submodule "static/js/classes/color"]
-	path = static/js/classes/color
+[submodule "static/js/submodules/color"]
+	path = static/js/submodules/color
 	url = https://github.com/tsaxking/colors.git
-[submodule "static/js/classes/custom-bootstrap"]
-	path = static/js/classes/custom-bootstrap
+[submodule "static/js/submodules/custom-bootstrap"]
+	path = static/js/submodules/custom-bootstrap
 	url = https://github.com/tsaxking/custom-bootstrap.git
-[submodule "static/js/classes/canvas"]
-	path = static/js/classes/canvas
+[submodule "static/js/submodules/canvas"]
+	path = static/js/submodules/canvas
 	url = https://github.com/tsaxking/canvas.git

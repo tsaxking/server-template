@@ -94,9 +94,8 @@ module.exports = {
             const smallIgnore = streams[stream].ignore || [];
             if (stream.endsWith('.js')) {
                 for (let file of streams[stream].files) {
-                    file = file.replace('--ignore-build', '').trim();
-                    if (file.includes('--ignore-build')) {
-                        globalFiles.push(file);
+                    if (file.includes('--ignore-build') || file.startsWith('http')) {
+                        globalFiles.push(file.replace('--ignore-build', ''));
                         continue;
                     }
 
@@ -125,7 +124,10 @@ module.exports = {
                 }
             } else {
                 for (let file of streams[stream].files) {
-                    file = file.replace('--ignore-build', '').trim();
+                    if (file.includes('--ignore-build') || file.startsWith('http')) {
+                        globalFiles.push(file.replace('--ignore-build', ''));
+                        continue;
+                    }
 
                     if (ignore.includes(file) || smallIgnore.includes(file)) continue;
                     if (file.endsWith('.css')) {

@@ -1,63 +1,56 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Email = void 0;
-const nodemailer = __importStar(require("nodemailer"));
-const sgTransport = __importStar(require("nodemailer-sendgrid-transport"));
-const os = __importStar(require("os"));
+const nodemailer = require('nodemailer'),
+    sgTransport = require('nodemailer-sendgrid-transport');
 require('dotenv').config();
+const os = require('os');
+
+const inDevelopment = os.hostname() != 'BERINT-SERVER';
+
+
+// Creates connection to my gmail
 var transporter = nodemailer.createTransport(sgTransport({
     service: 'gmail',
     auth: {
-        api_key: process.env.SENGRID_API_KEY
+        api_key: process.env.SENDGRID_API_KEY
     }
 }));
+
 class Email {
-    static #templates = {};
-    static get templates() {
-        return this.#templates;
-    }
-    static addTemplate(name, template) {
-        this.#templates[name] = template;
-    }
-    recipient;
-    subject;
-    #attachments = [];
-    constructor(recipient, subject) {
+    /**
+     * 
+     * @param {String} recipient 
+     * @param {String} subject 
+     */
+    constructor(recipient, subject, attachments) {
         this.recipient = recipient;
         this.subject = subject;
+        this.attachments = attachments;
     }
-    addAttachment(attachment) {
-        this.#attachments.push(attachment);
-    }
-    removeAttachment(attachment) {
-        this.#attachments = this.#attachments.filter(a => a != attachment);
-    }
+
+    /**
+     * @description Sends the email. BE SURE TO PUT this.text OR this.html BEFORE SENDING
+     * @param {Function} callback Optional (error, emailInfo)
+     */
     send() {
-        if (os)
-            ;
+        if (inDevelopment) {
+            if (this.message) this.message = this.message.replace(new RegExp('https://tatorscout.org', 'gi'), 'http://localhost:2122');
+            if (this.html) this.html = this.html.replace(new RegExp('https://tatorscout.org', 'gi'), 'http://localhost:2122');
+        }
+
+        let mailOptions = {
+            from: 'tatorscout@gmail.com',
+            to: this.recipient,
+            subject: this.subject,
+            text: this.message,
+            html: this.html,
+            cc: this.cc,
+            bcc: this.bcc,
+            attachments: Array.isArray(this.attachments) ? this.attachments : []
+        }
+        transporter.sendMail(mailOptions, (err, info) => {
+            if (err) console.error(err);
+            else console.log(info);
+        });
     }
 }
-exports.Email = Email;
+
+exports = module.exports = Email;

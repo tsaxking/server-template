@@ -212,6 +212,7 @@ const getDependency = async (url) => {
 
 
 const runBuild = async() => {
+    const build = readJSON(path.resolve(__dirname, './build.json'));
     console.log('Starting build...');
 
 
@@ -232,7 +233,7 @@ const runBuild = async() => {
         watching.push(path.resolve(__dirname, '../server-functions'));
     }
 
-    const { ignore: globalIgnore, minify, streams, buildDir } = build;
+    const { ignore: globalIgnore, minify, streams, buildDir, ignoreHttp } = build;
 
     if (!streams) {
         console.error('No streams defined! Aborting build...');
@@ -243,7 +244,6 @@ const runBuild = async() => {
             ...build,
             streams: {
                 "stream.js": {
-                    folder: './src (or any other folder)',
                     priority: ['index.js', 'main.js', '(any other files you want to be loaded first in order)'],
                     ignore: ['test.js', '(any other files you want to ignore)'],
                     files: [
@@ -279,6 +279,7 @@ const runBuild = async() => {
         if (files) {
             for (let f of files) {
                 if (f.includes('--ignore-build')) continue;
+                if (ignoreHttp && f.startsWith('http')) continue;
 
                 if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
                 if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
@@ -291,7 +292,6 @@ const runBuild = async() => {
                 const ts = f.startsWith('[ts]');
 
                 if (fs.statSync(path.resolve(__dirname, f.replace('[ts]', ''))).isDirectory()) {
-                    watchDir(path.resolve(__dirname, f.replace('[ts]', '')), watchDir);
                     // format: [ts]../path/to/dir
                     if (ts) {
                         const p = await runTs(path.resolve(__dirname, f.replace('[ts]', '')));
