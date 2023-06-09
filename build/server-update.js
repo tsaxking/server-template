@@ -1,5 +1,7 @@
+const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+
 const start = Date.now();
-const args = process.argv.slice(2);
+const args = workerData?.args || process.argv.slice(2);
 console.log('Update args:', args);
 console.log('\x1b[41mThis may take a few seconds, please wait...\x1b[0m');
 
@@ -336,7 +338,10 @@ const serverUpdate = async() => {
     return console.log('Finished all update tasks!');
 }
 
-if (args.includes('main')) serverUpdate();
+if (args.includes('main')) {
+    serverUpdate();
+    parentPort?.postMessage('update-complete');
+}
 
 module.exports = {
     runFunction

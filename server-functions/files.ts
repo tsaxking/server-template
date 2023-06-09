@@ -2,10 +2,12 @@ import { NextFunction } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
-import { build } from '../build/pseudo-build';
 import { HTMLElement, parse } from 'node-html-parser';
 import { render } from 'node-html-constructor/versions/v3';
 import callsite from 'callsite';
+import { workerData } from 'worker_threads';
+
+
 // console.log(build);
 
 /**
@@ -198,7 +200,7 @@ export function saveJSON(file: string, data: any): Promise<boolean> {
  *
  * @type {*}
  */
-let builds: any = build();
+let builds: any = workerData?.builds || {};
 const buildJSON = getJSONSync('../build/build.json');
 !buildJSON.buildDir.endsWith('/') && (buildJSON.buildDir += '/'); // make sure it ends with a slash 
 

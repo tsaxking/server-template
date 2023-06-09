@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const builder = {
+const builds = {
 // put your pages here:
 /*
 example:
@@ -16,10 +16,10 @@ example:
     }
 */
 };
-module.exports = async (req, res, next) => {
+exports.default = async (req, res, next) => {
     const { url } = req;
-    if (builder[url]) {
-        res.send(await builder[url](req));
+    if (builds[url]) {
+        res.send(await builds[url](req));
     }
     else {
         next();

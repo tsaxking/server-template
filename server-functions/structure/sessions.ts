@@ -5,17 +5,10 @@ import Account from './accounts';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseCookie } from './cookie';
+import { Socket } from 'socket.io';
 
 type CustomRequest = Request & { session: Session };
-type Socket = {
-    emit: (event: string, ...args: any[]) => void;
 
-    handshake: {
-        headers: {
-            cookie: string;
-        }
-    }
-}
 
 export class Session {
     static middleware(req: CustomRequest, res: Response, next: NextFunction) {
@@ -77,19 +70,20 @@ export class Session {
         return session;
     }
 
-    static addSocket(socket: Socket) {
+    static addSocket(socket: Socket): boolean {
         const cookie = socket.handshake.headers.cookie;
-        if (!cookie) return;
+        if (!cookie) return false;
         const { id } = parseCookie(cookie) as { id: string };
-        if (!id) return;
+        if (!id) return false;
         const session = Session.sessions[id];
-        if (!session) return;
+        if (!session) return false;
         session.setSocket(socket);
+        return true;
     }
 
 
 
-    ip: string;
+    ip: string|null;
     id: string;
     latestActivity: number = Date.now();
     account?: Account;

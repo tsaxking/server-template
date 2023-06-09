@@ -3,7 +3,7 @@ import * as path from 'path';
 import { getJSON, getTemplate } from './files';
 import { NextFunction, Request, Response } from 'express';
 
-const builder: {
+const builds: {
     [key: string]: (req: Request) => string;
 } = {
     // put your pages here:
@@ -27,10 +27,10 @@ const builder: {
 };
 
 
-module.exports = async (req: Request, res: Response, next: NextFunction) => {
+export default async (req: Request, res: Response, next: NextFunction) => {
     const { url } = req;
-    if (builder[url]) {
-        res.send(await builder[url](req));
+    if (builds[url]) {
+        res.send(await builds[url](req));
     } else {
         next();
     }

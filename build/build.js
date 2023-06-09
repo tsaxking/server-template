@@ -1,406 +1,323 @@
-const fs = require('fs');
-const path = require('path');
-const UglifyJS = require("uglify-js");
-const postcss = require('postcss');
-const cssnano = require('cssnano');
-const autoprefixer = require('autoprefixer');
-const ChildProcess = require('child_process');
-const axios = require('axios');
-const sass = require('sass');
-const { compile: ignoreCompiler } = require('@gerhobbelt/gitignore-parser');
-
-
-const ignoreList = [];
-
-/**
- * 
- * @param {String[]} ignoreArr 
- * @param {String} file 
- */
-const ignoreTest = (ignoreArr, file) => {
-    // test if file starts with C:/ or C:\\ or some equivalent
-    const topLevelTest = /^[a-zA-Z]:\\/.test(file) || /^[a-zA-Z]:\//.test(file);
-
-    file = path.relative(__dirname, topLevelTest ? file : path.resolve(__dirname, file));
-    // console.log('Testing ignore...', file);
-
-    const gitignore = ignoreCompiler(ignoreArr.join('\n'));
-    const test = gitignore.denies(file);
-    if (test) {
-        console.log('Ignored:', file);
-        ignoreList.push(file);
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
     }
-    return test;
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const uglify_js_1 = __importDefault(require("uglify-js"));
+const postcss_1 = __importDefault(require("postcss"));
+const cssnano_1 = __importDefault(require("cssnano"));
+const autoprefixer_1 = __importDefault(require("autoprefixer"));
+const axios_1 = __importDefault(require("axios"));
+const sass_1 = __importDefault(require("sass"));
+// import { compile } from '@gerhobbelt/gitignore-parser';
+const worker_threads_1 = require("worker_threads");
+const typescript_1 = __importDefault(require("typescript"));
+var Colors;
+(function (Colors) {
+    Colors["Reset"] = "\u001B[0m";
+    Colors["Bright"] = "\u001B[1m";
+    Colors["Dim"] = "\u001B[2m";
+    Colors["Underscore"] = "\u001B[4m";
+    Colors["Blink"] = "\u001B[5m";
+    Colors["Reverse"] = "\u001B[7m";
+    Colors["Hidden"] = "\u001B[8m";
+    Colors["FgBlack"] = "\u001B[30m";
+    Colors["FgRed"] = "\u001B[31m";
+    Colors["FgGreen"] = "\u001B[32m";
+    Colors["FgYellow"] = "\u001B[33m";
+    Colors["FgBlue"] = "\u001B[34m";
+    Colors["FgMagenta"] = "\u001B[35m";
+    Colors["FgCyan"] = "\u001B[36m";
+    Colors["BgBlack"] = "\u001B[40m";
+    Colors["BgRed"] = "\u001B[41m";
+    Colors["BgGreen"] = "\u001B[42m";
+    Colors["BgYellow"] = "\u001B[43m";
+    Colors["BgBlue"] = "\u001B[44m";
+    Colors["BgMagenta"] = "\u001B[45m";
+    Colors["BgCyan"] = "\u001B[46m";
+})(Colors || (Colors = {}));
+const watchIgnoreList = [
+    path.resolve(__dirname, './ignore-list.txt')
+];
+const watchIgnoreDirs = [
+    path.resolve(__dirname, './dependencies'),
+    path.resolve(__dirname, '../uploads'),
+    path.resolve(__dirname, '../static/build'),
+    path.resolve(__dirname, '../archive'),
+    path.resolve(__dirname, '../history'),
+    path.resolve(__dirname, '../db')
+];
+const dirs = [
+    '../static',
+    '../static/build',
+    './dependencies'
+];
+for (const dir of dirs) {
+    if (!fs.existsSync(path.resolve(__dirname, dir))) {
+        fs.mkdirSync(path.resolve(__dirname, dir));
+    }
 }
-
-
-let watchDirs = [];
-const watchDir = (dir) => {
-    // const watch = (eventType, filename) => {
-    //     if (filename && (filename.includes('.js') || filename.includes('.ts')) && !globalWatchIgnore.includes(filename)) {
-    //         watchDirs.forEach(fs.unwatchFile);
-    //         watchDirs = [];
-    //         runBuild();
-    //     }
-    // };
-
-    // fs.watch(dir, watch);
-    // watchDirs.push(dir);
-}
-
-
 const readJSON = (path) => {
     let content = fs.readFileSync(path, 'utf8');
-
     // remove all /* */ comments
     content = content.replace(/\/\*[\s\S]*?\*\//g, '');
     // remove every comment after "// "
     content = content.replace(/\/\/ .*/g, '');
-
     return JSON.parse(content);
-}
-
+};
 const build = readJSON(path.resolve(__dirname, './build.json'));
-const mapDirectory = (dir, type, priority = []) => {
-    const files = [];
-
-    const readDir = (dir) => {
-        const list = fs.readdirSync(dir);
-
-        list.forEach((file) => {
-            const filePath = path.join(dir, file);
-
-            const stat = fs.statSync(filePath);
-
-            if (stat && stat.isDirectory()) {
-                readDir(filePath);
-            } else {
-                const ext = path.extname(filePath);
-                // console.log(ext, type);
-                if (ext !== '.' + type) return;
-                const name = path.basename(filePath, ext);
-
-                files.push({
-                    path: filePath,
-                    name: name,
-                    ext,
-                    priority: priority.indexOf(name) !== -1 ? priority.indexOf(name) : Infinity
-                });
-            }
-        });
-    };
-
-    readDir(dir);
-
-    files.sort((a, b) => a.priority - b.priority);
-
-    return files;
+const { streams, ignore, minify } = build;
+const fromUrl = async (url, stream) => {
+    return new Promise(async (res, rej) => {
+        let data;
+        if (fs.existsSync(path.resolve(__dirname, `./dependencies/${url}`))) {
+            data = fs.readFileSync(path.resolve(__dirname, `./dependencies/${url}`), 'utf8');
+        }
+        else {
+            data = (await axios_1.default.get(url)).data;
+        }
+        stream.write(data);
+        watchIgnoreList.push(path.resolve(__dirname, `./dependencies/${url}`));
+        res(null);
+    });
 };
-
-const delimiters = {
-    js: ";\n",
-    css: "\n"
-}
-
-const spawnChild = ({ command, args = [], onData = true, onOpen = true, onClose = false }, name) => {
-    const child = ChildProcess.spawn(command, args, {
-        stdio: 'pipe',
-        shell: true,
-        cwd: process.cwd(),
-        env: process.env
-    });
-    if (onData) {
-        child.stdout.on('data', data => {
-            try {
-                console.log(name + ':', data.toString().trim('\r'));
-            } catch {}
+const fromTs = async (filePath, stream, ext) => {
+    return new Promise(async (res, rej) => {
+        const tsConfig = readJSON(path.resolve(__dirname, filePath, './tsconfig.json'));
+        const program = typescript_1.default.createProgram([filePath], {
+            ...tsConfig.compilerOptions,
+            noEmitOnError: true
         });
-    }
-    child.stderr.on('data', data => {
-        try {
-            console.log(name + ':', data.toString().trim('\r'));
-        } catch {}
-    });
-    if (onClose) {
-        child.on('exit', code => {
-            try {
-                console.log(name + ':', 'exited with code', code);
-            } catch {}
-        });
-    }
-    child.log = (...args) => {
-        console.log(name + ':', ...args);
-    }
-
-    if (onOpen) {
-        const funSpawnMessgges = [
-            'A wild child has appeared!',
-            'Summoning child...',
-            'Child has been summoned!',
-            'Child has been summoned!',
-            'Child has been born!'
-        ];
-
-        child.log(funSpawnMessgges[Math.floor(Math.random() * funSpawnMessgges.length)]);
-    }
-
-    return child;
-}
-
-const runTs = async (directory) => {
-    return new Promise((res,rej) => {
-        const tsConfig = readJSON(path.resolve(__dirname, directory, './tsconfig.json'));
-
-        const child = ChildProcess.spawn('tsc', [], {
-            stdio: 'pipe',
-            shell: true,
-            cwd: directory,
-            env: process.env
-        });
-
-        // log data in green
-        const log = (data) => {
-            console.log('\x1b[32mtsc:\x1b[0m', data.toString().trim('\r'));
-        };
-
-        child.stdout.on('data', log);
-        child.stderr.on('data', log);
-        child.on('close', (code) => {
-            console.error(`tsc child process exited with code ${code}`);
-
-            switch (code) {
-                // if tsc is not installed
-                case 127:
-                    return rej('tsc is not installed properly on your machine! Please install it globally with "npm i -g typescript"!', directory);
-                // if tsc is installed but there is no tsconfig.json
-                default:
-                    break;
+        const emitResult = program.emit();
+        const allDiagnostics = typescript_1.default.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
+        allDiagnostics.forEach(diagnostic => {
+            if (diagnostic.file) {
+                const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+                const message = typescript_1.default.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+                console.log(`${diagnostic.file.fileName} (${line + 1},${character + 1}): ${message}`);
             }
-    
-            if (!tsConfig.compilerOptions.outFile) return rej('No outFile defined in tsconfig.json!', directory);
-            if (!tsConfig.compilerOptions.outDir) tsConfig.compilerOptions.outDir = './';
-            res(path.resolve(__dirname, directory, tsConfig.compilerOptions.outDir, tsConfig.compilerOptions.outFile));
-
-            child.kill();
-        });
-    });
-}
-
-const watching = [];
-
-
-if (!fs.existsSync(path.resolve(__dirname, './cache'))) {
-    fs.mkdirSync(path.resolve(__dirname, './cache'));
-}
-
-
-const getDependency = async (url) => {
-    const fileSafeName = url.replace(/[^a-zA-Z0-9]/g, '_');
-    if (fs.existsSync(path.resolve(__dirname, './cache', fileSafeName))) {
-        return fs.readFileSync(path.resolve(__dirname, './cache', fileSafeName), 'utf8');
-    }
-
-    const { data } = await axios.get(url);
-
-    fs.writeFileSync(path.resolve(__dirname, './cache', fileSafeName), data, 'utf8');
-
-    return data;
-};
-
-
-
-
-
-const runBuild = async() => {
-    const build = readJSON(path.resolve(__dirname, './build.json'));
-    console.log('Starting build...');
-
-
-    const child = ChildProcess.spawn('tsc', [], {
-        stdio: 'pipe',
-        shell: true,
-        cwd: path.resolve(__dirname, '../server-functions'),
-        env: process.env
-    });
-
-    child.on('error', console.error);
-    child.stdout.on('data', console.log);
-    child.stderr.on('data', console.error);
-
-
-    if (!watching.includes(path.resolve(__dirname, '../server-functions'))) {
-        watchDir(path.resolve(__dirname, '../server-functions'), watchDir);
-        watching.push(path.resolve(__dirname, '../server-functions'));
-    }
-
-    const { ignore: globalIgnore, minify, streams, buildDir, ignoreHttp } = build;
-
-    if (!streams) {
-        console.error('No streams defined! Aborting build...');
-
-        console.log('Build failed!', 'Be sure to add a property "streams" to your build.json file.');
-        console.log("Example:");
-        console.log(JSON.stringify({
-            ...build,
-            streams: {
-                "stream.js": {
-                    priority: ['index.js', 'main.js', '(any other files you want to be loaded first in order)'],
-                    ignore: ['test.js', '(any other files you want to ignore)'],
-                    files: [
-                        "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js // will load this file from the internet",
-                        "../static/js/main.js // will only load this file if it exists",
-                        "[ts]../static/js/submodule // this will run tsc in this directory. tsconfig.json is required and must have an outFile property!",
-                        "../static/js/subfolder // this will load all files in this folder, prioritized by subdirectories and then alphabetically"
-                    ]
-                }
+            else {
+                console.log(typescript_1.default.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
             }
-        }));
-
-        return;
-    }
-
-    const fileStreams = Object.keys(streams).reduce((acc, cur) => {
-        acc[cur] = fs.createWriteStream(path.resolve(__dirname, buildDir, cur));
-        return acc;
-    }, {});
-
-
-    if (!fs.existsSync(path.resolve(__dirname, buildDir))) {
-        fs.mkdirSync(path.resolve(__dirname, buildDir));
-    }
-
-    for (const [name, file] of Object.entries(streams)) {
-        const type = path.extname(name).slice(1);
-        const { priority, ignore, files } = file;
-
-        const fileStream = fileStreams[name];
-
-
-        if (files) {
-            for (let f of files) {
-                if (f.includes('--ignore-build')) continue;
-                if (ignoreHttp && f.startsWith('http')) continue;
-
-                if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
-                if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
-                if (f.includes('http')) {
-                    const data = await getDependency(f);
-                    fileStream.write(data);
-                    fileStream.write(delimiters[type]);
+        });
+        const exitCode = emitResult.emitSkipped ? 1 : 0;
+        if (exitCode !== 0) {
+            console.error(new Error('There was an error compiling the project'));
+        }
+        if (tsConfig?.compilerOptions?.outFile) {
+            return res(fromFile(tsConfig.compilerOptions.outFile, stream, ext));
+        }
+        if (tsConfig?.compilerOptions?.outDir) {
+            return res(fromDir(tsConfig.compilerOptions.outDir, '.js', stream, []));
+        }
+        const readDir = (dirPath) => {
+            const files = fs.readdirSync(dirPath);
+            for (const file of files) {
+                if (fs.lstatSync(path.resolve(dirPath, file)).isDirectory()) {
+                    readDir(path.resolve(dirPath, file));
                     continue;
                 }
-                const ts = f.startsWith('[ts]');
-
-                if (fs.statSync(path.resolve(__dirname, f.replace('[ts]', ''))).isDirectory()) {
-                    // format: [ts]../path/to/dir
-                    if (ts) {
-                        const p = await runTs(path.resolve(__dirname, f.replace('[ts]', '')));
-
-                        if (globalIgnore && ignoreTest(globalIgnore, p)) continue;
-                        if (ignore && ignoreTest(ignore, p)) continue;
-
-                        if (p.includes('--ignore-build')) return;
-
-                        const content = fs.readFileSync(p);
-                        fileStream.write(content);
-                        fileStream.write(delimiters[type]);
-
-                        continue;
-                    }
-
-                    const files = mapDirectory(path.resolve(__dirname, f.replace('[ts]', '')), type, priority);
-                    
-                    for (const f of files) {
-                        if (ignore && ignoreTest(ignore, f.path.replace('[ts]', ''))) continue;
-                        if (globalIgnore && ignoreTest(globalIgnore, f.path.replace('[ts]', ''))) continue;
-
-                        if (f.path.includes('--ignore-build')) return;
-
-                        const content = fs.readFileSync(path.resolve(__dirname, f.path.replace('[ts]', '')));
-                        fileStream.write(content);
-                        fileStream.write('\n');
-                    }
-                } else {
-                    if (f.endsWith('.scss')) {
-                        const { css } = sass.compile(path.resolve(__dirname, f.replace('[ts]'), ''), {
-                            outputStyle: 'compressed'
-                        });
-                        f = f.replace('.scss', '.css');
-
-                        if (globalIgnore && ignoreTest(globalIgnore, f.replace('[ts]', ''))) continue;
-                        if (ignore && ignoreTest(ignore, f.replace('[ts]', ''))) continue;
-
-                        if (f.includes('--ignore-build')) return;
-
-                        fileStream.write(css);
-                        fileStream.write(delimiters[type]);
-                        continue;
-                    }
-
-
-                    if (fs.existsSync(path.resolve(__dirname, f.replace('[ts]', '')))) {
-                        const content = fs.readFileSync(path.resolve(__dirname, f.replace('[ts]', '')));
-                        fileStream.write(content);
-                        fileStream.write(delimiters[type]);
-                    } else {
-                        console.error(`File ${f.replace('[ts]', '')} does not exist!`);
-                    }
-                }
+                if (file.endsWith('.ts'))
+                    watchIgnoreList.push(path.resolve(dirPath, file.replace('.ts', '.js')));
             }
+        };
+        if (fs.lstatSync(filePath).isDirectory()) {
+            readDir(filePath);
         }
-    }
-
-    if (minify) {
-        Object.keys(build.streams).forEach((stream) => {
-            const streamPath = path.resolve(__dirname, buildDir, stream);
-
-            let content = fs.readFileSync(streamPath, 'utf8');
-            const ext = path.extname(streamPath);
-
-            stream = stream.replace(ext, '.min' + ext);
-            console.log('Minifying', stream, '...');
-
-            switch (ext) {
-                case '.js':
-                    content = UglifyJS.minify(content, {
-                        compress: {
-                            drop_console: true
-                        }
-                    }).code;
-                    fs.writeFileSync(path.resolve(__dirname, buildDir, stream), content);
-                    break;
-                case '.css':
-                    postcss([autoprefixer, cssnano])
-                        .process(content, { from: undefined })
-                        .then((result) => {
-                            content = result.css;
-                            fs.writeFileSync(path.resolve(__dirname, buildDir, stream), content);
-                        });
-                    break;
-            }
+    });
+};
+const fromSass = async (filePath, stream) => {
+    return new Promise(async (res, rej) => {
+        const { css } = sass_1.default.compile(path.resolve(__dirname, filePath), {
+            outputStyle: 'compressed'
         });
-    }
-
-    if (ignoreList.length) fs.writeFileSync(path.resolve(__dirname, './ignore-list.txt'), ignoreList.join('\n'));
-    else if (fs.existsSync(path.resolve(__dirname, './ignore-list.txt'))) {
+        stream.write(css.toString());
+        res(null);
+    });
+};
+const fromFile = (filePath, stream, ext) => {
+    return new Promise((res, rej) => {
+        // console.log(path.extname(filePath), ext);
+        if (path.extname(filePath) !== ext)
+            return res(null);
+        // console.log(filePath);
+        const content = fs.readFileSync(filePath, 'utf8');
+        stream.write(content);
+    });
+};
+const fromDir = async (dirPath, ext, stream, ignoreList) => {
+    ignoreList = ignoreList.map((file) => path.resolve(__dirname, file));
+    const readDir = (dirPath) => {
+        const files = fs.readdirSync(dirPath);
+        for (const file of files) {
+            if (fs.lstatSync(path.resolve(dirPath, file)).isDirectory()) {
+                if (dirPath.includes('.git'))
+                    continue;
+                readDir(path.resolve(dirPath, file));
+                continue;
+            }
+            if (ext && !file.endsWith(ext))
+                continue;
+            if (ignoreList.includes(file))
+                continue;
+            fromFile(path.resolve(dirPath, file), stream, ext);
+        }
+    };
+    readDir(path.resolve(__dirname, dirPath));
+};
+let watchStarted = false;
+const runBuild = async () => {
+    let { length } = Object.keys(build.streams);
+    let count = 0;
+    const countUp = () => {
+        count++;
+        if (count === length) {
+            worker_threads_1.parentPort?.postMessage('build-complete');
+            count = 0;
+        }
+    };
+    if (fs.existsSync(path.resolve(__dirname, './ignore-list.txt'))) {
         fs.unlinkSync(path.resolve(__dirname, './ignore-list.txt'));
     }
-
-    console.log('Build complete!');
-};
-
-runBuild();
-
-process.stdin.on('data', (data) => {
-    data = data.toString().trim().replace('\r', '');
-    const [command, ...args] = data.split(' ');
-    switch (command) {
-        case 'rebuild':
-            runBuild();
-            break;
+    for (let [streamName, data] of Object.entries(streams)) {
+        console.log('\x1b[32m', 'Stream:', '\x1b[0m', streamName);
+        const min = streamName.replace(path.extname(streamName), '.min' + path.extname(streamName));
+        watchIgnoreList.push(path.resolve(__dirname, `../static/build/${streamName}`));
+        watchIgnoreList.push(path.resolve(__dirname, `../static/build/${min}`));
+        // if (fs.existsSync(path.resolve(__dirname, `../static/build/${streamName}`))) {
+        fs.writeFileSync(path.resolve(__dirname, `../static/build/${streamName}`), '');
+        fs.writeFileSync(path.resolve(__dirname, `../static/build/${min}`), '');
+        // }
+        const { ignore: streamIgnore, files, priority } = data;
+        const stream = fs.createWriteStream(path.resolve(__dirname, `../static/build/${streamName}`));
+        const streamIgnoreList = [...(ignore || []), ...(streamIgnore || [])];
+        // console.log(files);
+        const delimiters = {
+            '.js': ';',
+            '.css': ''
+        };
+        for (let file of files) {
+            console.log('file', file);
+            if (file.includes('--ignore-build'))
+                continue;
+            if (file.includes('http') && !file.includes('--force'))
+                continue;
+            file = file.replace('--force', '');
+            file = file.replace('[ts]', '');
+            try {
+                if (file.includes('http')) {
+                    await fromUrl(file, stream);
+                    continue;
+                }
+                if (file.startsWith('[ts]')) {
+                    await fromTs(file, stream, path.extname(streamName));
+                    continue;
+                }
+                if (path.extname(file) === '.scss' || path.extname(file) === '.sass') {
+                    await fromSass(file, stream);
+                    continue;
+                }
+                if (fs.lstatSync(path.resolve(__dirname, file)).isDirectory()) {
+                    await fromDir(file, path.extname(streamName), stream, streamIgnoreList);
+                    continue;
+                }
+                if (fs.existsSync(path.resolve(__dirname, file))) {
+                    await fromFile(file, stream, path.extname(streamName));
+                    continue;
+                }
+                stream.write(delimiters[path.extname(streamName)] + '\n');
+            }
+            catch (err) {
+                console.log(err);
+            }
+        }
+        stream.close(async (error) => {
+            if (error) {
+                return console.error(error);
+            }
+            if (minify) {
+                // continue;
+                const streamPath = path.resolve(__dirname, '../static/build', streamName);
+                let content = fs.readFileSync(streamPath, 'utf8');
+                const ext = path.extname(streamPath);
+                streamName = streamName.replace(ext, '.min' + ext);
+                console.log('Minifying', streamName + '...');
+                console.log(ext);
+                switch (ext) {
+                    case '.js':
+                        console.log('Minifying JS...');
+                        content = uglify_js_1.default.minify(content, {
+                            compress: {
+                                drop_console: true
+                            }
+                        }).code;
+                        break;
+                    case '.css':
+                        console.log('Minifying CSS...');
+                        content = await (0, postcss_1.default)([autoprefixer_1.default, cssnano_1.default]).process(content, { from: undefined })
+                            .then(result => {
+                            return result.css;
+                        }).catch(err => {
+                            console.log("ERROR MINIFYING CSS", err);
+                        }) || '';
+                        break;
+                }
+                fs.writeFileSync(path.resolve(__dirname, '../static/build', streamName), content);
+                if (watchIgnoreList.length)
+                    fs.writeFileSync(path.resolve(__dirname, './ignore-list.txt'), watchIgnoreList.join('\n'));
+            }
+            countUp();
+        });
     }
-});
-
-
-// fs.watch(path.resolve(__dirname), runBuild);
-// fs.watch(path.resolve(__dirname, './build.json'), runBuild);
+    // parentPort?.postMessage('build-complete');
+    if (!watchStarted) {
+        console.log(watchIgnoreList);
+        fs.watch('../', { recursive: true }, (eventType, filename) => {
+            if (watchIgnoreList.includes(path.resolve(__dirname, '../../', filename)))
+                return;
+            if (watchIgnoreDirs.some((dir) => path.resolve(__dirname, '../../', filename).includes(dir)))
+                return;
+            const extNames = [
+                '.js',
+                '.css',
+                '.ts',
+                '.html',
+                '.scss',
+                '.sass',
+                '.json'
+            ];
+            if (!extNames.includes(path.extname(filename)))
+                return;
+            console.log(Colors.FgMagenta, 'File changed:', Colors.Reset, filename);
+            worker_threads_1.parentPort?.postMessage('build-start');
+            runBuild();
+        });
+        watchStarted = true;
+    }
+};
+runBuild();

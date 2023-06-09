@@ -85,14 +85,15 @@ class Session {
     static addSocket(socket) {
         const cookie = socket.handshake.headers.cookie;
         if (!cookie)
-            return;
+            return false;
         const { id } = (0, cookie_1.parseCookie)(cookie);
         if (!id)
-            return;
+            return false;
         const session = Session.sessions[id];
         if (!session)
-            return;
+            return false;
         session.setSocket(socket);
+        return true;
     }
     ip;
     id;
