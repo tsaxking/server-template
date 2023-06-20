@@ -25,6 +25,20 @@ export class Session {
     }
     static addSession(session: Session) {
         Session._sessions[session.id] = session;
+        if (!session.account) {
+            session.signOut();
+            session.account = new Account({
+                username: 'guest',
+                key: '',
+                salt: '',
+                verified: 1,
+                roles: JSON.stringify(['guest']),
+                email: '',
+                name: 'Guest',
+                tatorBucks: 0,
+                info: '{}'
+            })
+        }
     }
     static removeSession(session: Session) {
         delete Session._sessions[session.id];
@@ -38,7 +52,7 @@ export class Session {
                 ip: session.ip,
                 id: session.id,
                 latestActivity: session.latestActivity,
-                account: session.account
+                account: session.account?.username
             };
         });
 
@@ -54,19 +68,19 @@ export class Session {
         if (!fs.existsSync(path.resolve(__dirname, './sessions.txt'))) return fs.writeFileSync(path.resolve(__dirname, './sessions.txt'), '{}', 'utf8');
 
         const s = fs.readFileSync(path.resolve(__dirname, './sessions.txt'), 'utf8');
-        const sessions = JSON.parse(s);
+        const sessions = JSON.parse(s) as {[key: string]: any};
 
-        Object.entries(sessions).forEach(([id, session]) => {
-            Session.addSession(Session.fromSessObj(session));
-        });
+        return Promise.all(Object.entries(sessions).map(async ([id, session]) => {
+            Session.addSession(await Session.fromSessObj(session));
+        }));
     }
 
-    static fromSessObj(s: any) {
+    static async fromSessObj(s: any) {
         const session = new Session();
         session.ip = s.ip;
         session.id = s.id;
         session.latestActivity = s.latestActivity;
-        session.account = s.account;
+        session.account = await Account.fromUsername(s.account);
         return session;
     }
 
@@ -86,7 +100,7 @@ export class Session {
     ip: string|null;
     id: string;
     latestActivity: number = Date.now();
-    account?: Account;
+    account: Account|null = null;
     socket?: Socket;
 
     constructor(req?: CustomRequest, res?: Response) {
@@ -109,7 +123,7 @@ export class Session {
     }
 
     signOut() {
-        delete this.account;
+        this.account = null;
     }
 
     destroy() {

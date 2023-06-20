@@ -3,9 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { HTMLElement, parse } from 'node-html-parser';
-import { render } from 'node-html-constructor/versions/v3';
+import render from 'node-html-constructor/versions/v4';
 import callsite from 'callsite';
 import { workerData } from 'worker_threads';
+import ObjectsToCsv from 'objects-to-csv';
+import { config } from 'dotenv';
+
+
+config();
 
 
 // console.log(build);
@@ -15,7 +20,8 @@ import { workerData } from 'worker_threads';
  *
  * @type {*}
  */
-const env = process.argv[2] || 'dev';
+const env = workerData?.mode || process.argv[2] || 'dev';
+
 
 /**
  * Gets a json from the jsons folder
@@ -210,7 +216,8 @@ const buildJSON = getJSONSync('../build/build.json');
  * @param {string} template
  * @returns {*}
  */
-const runBuilds = (template: string) => {
+const runBuilds = (template: string): string => {
+    // console.log('Running build on template: ', template);
     const root = parse(template);
     const insertBefore = (parent: HTMLElement, child: HTMLElement, before: HTMLElement) => {
         parent.childNodes.splice(parent.childNodes.indexOf(before), 0, child);
@@ -233,9 +240,11 @@ const runBuilds = (template: string) => {
                 (stream.files as string[]).forEach(f => {
                     // console.log(f);
 
-                    // find --ignore-build
-                    const regex = /--ignore-build\s*/g;
-                    if (!regex.test(f)) return;
+                    if (!f.endsWith('--ignore-build')) {
+                        if (!f.startsWith('http') && !f.endsWith('--force')) {
+                            return;
+                        }
+                    }
 
 
                     // console.log('Includes ignore build', f);
@@ -259,9 +268,12 @@ const runBuilds = (template: string) => {
 
                 (stream.files as string[]).forEach(f => {
                     // console.log(f);
-                    // find --ignore-build
-                    const regex = /--ignore-build\s*/g;
-                    if (!regex.test(f)) return;
+
+                    if (!f.endsWith('--ignore-build')) {
+                        if (!f.startsWith('http') && !f.endsWith('--force')) {
+                            return;
+                        }
+                    }
 
                     // console.log('Includes ignore build', f);
                     f = f.replace('--ignore-build', '').trim();
@@ -282,9 +294,12 @@ const runBuilds = (template: string) => {
                 s.setAttribute('src', `${buildJSON.buildDir}${s.attributes.src}`);
                 (stream.files as string[]).forEach(f => {
                     // console.log(f);
-                    // find --ignore-build
-                    const regex = /--ignore-build\s*/g;
-                    if (!regex.test(f)) return;
+
+                    if (!f.endsWith('--ignore-build')) {
+                        if (!f.startsWith('http') && !f.endsWith('--force')) {
+                            return;
+                        }
+                    }
 
                     // console.log('Includes ignore build', f);
                     f = f.replace('--ignore-build', '').trim();
@@ -302,9 +317,12 @@ const runBuilds = (template: string) => {
                 l.setAttribute('href', `${buildJSON.buildDir}${l.attributes.href}`);
                 (stream.files as string[]).forEach(f => {
                     // console.log(f);
-                    // find --ignore-build
-                    const regex = /--ignore-build\s*/g;
-                    if (!regex.test(f)) return;
+
+                    if (!f.endsWith('--ignore-build')) {
+                        if (!f.startsWith('http') && !f.endsWith('--force')) {
+                            return;
+                        }
+                    }
 
                     // console.log('Includes ignore build', f);
                     f = f.replace('--ignore-build', '').trim();
@@ -320,8 +338,8 @@ const runBuilds = (template: string) => {
                     const scriptTag = root.querySelector(`script[src="${script}"]`);
                     if (!scriptTag) return;
 
-                    (builds[script] as string[]).forEach(build => {
-                        const newScript = parse(`<script src="${build.replace('\\', '')}"></script>`);
+                    (workerData?.builds[script] as string[]).forEach(build => {
+                        const newScript = parse(`<script src="${build.replace(/\\/g, '/')}"></script>`);
                         insertBefore(scriptTag.parentNode, newScript, scriptTag);
                     });
                     scriptTag.remove();
@@ -329,14 +347,15 @@ const runBuilds = (template: string) => {
                     const linkTag = root.querySelector(`link[href="${script}"]`);
                     if (!linkTag) return;
 
-                    (builds[script] as string[]).forEach(build => {
-                        const newLink = parse(`<link rel="stylesheet" href="${build.replace('\\', '')}">`);
+                    (workerData?.builds[script] as string[]).forEach(build => {
+                        const newLink = parse(`<link rel="stylesheet" href="${build.replace(/\\/g, '/')}">`);
                         insertBefore(linkTag.parentNode, newLink, linkTag);
                     });
                     linkTag.remove();
                 }
             });
     }
+
     return root.toString();
 }
 
@@ -782,4 +801,25 @@ export function openAllInFolder(dir: string, cb: FileCb, options: FileOpts = {})
             });
         });
     });
+}
+
+
+export enum LogType {
+    request = 'request',
+    error = 'error',
+    debugger = 'debugger',
+    status = 'status'
+}
+
+export type LogObj = {
+    [key: string]: string|number|boolean|undefined|null;
+}
+
+if (!fs.existsSync(path.resolve(__dirname, '../logs'))) fs.mkdirSync(path.resolve(__dirname, '../logs'));
+
+export async function log(type: LogType, dataObj: LogObj) {
+    return new ObjectsToCsv([dataObj]).toDisk(
+        path.resolve(__dirname, `../logs/${type}.csv`), 
+        { append: true }
+    );
 }
