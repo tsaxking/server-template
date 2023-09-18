@@ -1,12 +1,16 @@
 import { MAIN } from "../databases";
 import crypto from "crypto";
 import { uuid } from "./uuid";
-import Role from "./roles";
+import Role, { Permission } from "./roles";
 import { NextFunction, Request, Response } from "express";
 import { Status } from "./status";
 import { validate } from 'deep-email-validator';
-import { Email, EmailType } from "./email";
+import { Email, EmailOptions, EmailType } from "./email";
 import { config } from 'dotenv';
+import Filter from 'bad-words';
+import { Member, MemberInfo, MembershipProgress } from "./member";
+import * as fs from 'fs';
+import * as path from 'path';
 
 
 config();
@@ -17,13 +21,15 @@ type AccountObject = {
     key: string;
     salt: string;
     info: string; // json string
-    roles: string; // json string
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
-    verified: number;
     passwordChange?: string;
-    tatorBucks: number;
     discordLink?: string; // json string
+    picture?: string;
+    verified: number;
+    verification?: string;
+    emailChange?: string; // json string
 }
 
 
@@ -46,10 +52,15 @@ export enum AccountStatus {
     emailTaken = 'emailTaken',
     notFound = 'notFound',
     created = 'created',
+    removed = 'removed',
+    checkEmail = 'checkEmail',
+    emailChangeExpired = 'emailChangeExpired',
 
     // verification
     alreadyVerified = 'alreadyVerified',
     notVerified = 'notVerified', 
+    verified = 'verified',
+    invalidVerificationKey = 'invalidVerificationKey',
 
     // login
     incorrectPassword = 'incorrectPassword',
@@ -61,7 +72,17 @@ export enum AccountStatus {
     // roles
     hasRole = 'hasRole',
     noRole = 'noRole',
+    invalidRole = 'invalidRole',
+    roleAdded = 'roleAdded',
+    roleRemoved = 'roleRemoved',
 
+
+    // skills
+    hasSkill = 'hasRole',
+    noSkill = 'noRole',
+    invalidSkill = 'invalidRole',
+    skillAdded = 'roleAdded',
+    skillRemoved = 'roleRemoved',
 
 
 
@@ -69,7 +90,18 @@ export enum AccountStatus {
     passwordChangeSuccess = 'passwordChangeSuccess',  
     passwordChangeInvalid = 'passwordChangeInvalid',
     passwordChangeExpired = 'passwordChangeExpired',
-    passwordChangeUsed = 'passwordChangeUsed'
+    passwordChangeUsed = 'passwordChangeUsed',
+
+
+
+    invalidBio = 'invalidBio',
+    invalidTitle = 'invalidTitle',
+}
+
+export enum AccountDynamicProperty {
+    firstName = 'firstName',
+    lastName = 'lastName',
+    picture = 'picture'
 }
 
 
@@ -87,25 +119,10 @@ export default class Account {
         [username: string]: Account
     } = {};
 
-    static async fromRole(role: string): Promise<Account[]> {
-        const query = `
-            SELECT * FROM Accounts
-            WHERE roles LIKE ?
-        `;
-
-        const data = await MAIN.all(query, [`%${role}%`]);
-        return data.map((a: AccountObject) => new Account(a));
-    }
-
     static async fromUsername(username: string): Promise<Account|null> {
         if (Account.cachedAccounts[username]) return Account.cachedAccounts[username];
 
-        const query = `
-            SELECT * FROM Accounts
-            WHERE username = ?
-        `;
-
-        let data = await MAIN.get(query, [username]);
+        let data = await MAIN.get('account-from-username', [username]);
         if (!data) return null;
         const a = new Account(data as AccountObject);
         Account.cachedAccounts[username] = a;
@@ -119,17 +136,25 @@ export default class Account {
             if (account.email === email) return account;
         }
 
-        // find in database
-        const query = `
-            SELECT * FROM Accounts
-            WHERE email = ?
-        `;
 
-        let data = await MAIN.get(query, [email]);
+        let data = await MAIN.get('account-from-email', [email]);
         if (!data) return null;
         const a = new Account(data as AccountObject);
         Account.cachedAccounts[a.username] = a;
         return a;
+    }
+
+    static async fromVerificationKey(key: string): Promise<Account|null> {
+        const cachedAccount = Object.values(Account.cachedAccounts).find((a) => a.verification === key);
+
+        if (cachedAccount) return cachedAccount;
+
+        const act = await MAIN.get('account-from-verification-key', [key]);
+        if (!act) return null;
+
+        const account = new Account(act as AccountObject);
+        Account.cachedAccounts[account.username] = account;
+        return account;
     }
 
     static async fromPasswordChangeKey(key: string): Promise<Account|null> {
@@ -139,37 +164,11 @@ export default class Account {
             if (account.passwordChange === key) return account;
         }
 
-
-        const query = `
-            SELECT * FROM Accounts
-            WHERE passwordChange = ?
-        `;
-
-        let data = await MAIN.get(query, [key]);
+        let data = await MAIN.get('account-from-password-change', [key]);
         if (!data) return null;
         const a = new Account(data as AccountObject);
         Account.cachedAccounts[a.username] = a;
         return a;
-    }
-
-    static async verifiedAccounts(): Promise<Account[]> {
-        const query = `
-            SELECT * FROM Accounts
-            WHERE verified = 1
-        `;
-
-        const data = await MAIN.all(query);
-        return data.map((a: AccountObject) => new Account(a));
-    }
-
-    static async unverifiedAccounts(): Promise<Account[]> {
-        const query = `
-            SELECT * FROM Accounts
-            WHERE verified = 0
-        `;
-
-        const data = await MAIN.all(query);
-        return data.map((a: AccountObject) => new Account(a));
     }
 
     static allowPermissions(...permission: string[]): NextFunction {
@@ -182,41 +181,19 @@ export default class Account {
                 return s.send(res);
             }
 
-            account.getPermissions()
-                .then((permissions) => {
-                    if (permissions.permissions.every((p) => permission.includes(p))) {
-                        return next();
-                    } else {
-                        const s = Status.from('permissions.invalid', req);
-                        return s.send(res);
-                    }
-                })
-                .catch((err) => {
-                    const s = Status.from('permissions.error', req, err);
-                    return s.send(res);
-                })
-        }
-
-        return fn as NextFunction;
-    }
-
-    static allowRoles(...role: string[]): NextFunction {
-        const fn = (req: Request, res: Response, next: NextFunction) => {
-            const { session } = req;
-            const { account } = session;
-
-            if (!account) {
-                return Status.from('account.notLoggedIn', req).send(res);
-            }
-
-            const { roles } = account;
-
-            if (role.every(r => roles.includes(r))) {
-                return next();
-            } else {
-                const s = Status.from('roles.invalid', req);
-                return s.send(res);
-            }
+            // account.getPermissions()
+            //     .then((permissions) => {
+            //         if (permissions.permissions.every((p) => permission.includes(p))) {
+            //             return next();
+            //         } else {
+            //             const s = Status.from('permissions.invalid', req);
+            //             return s.send(res);
+            //         }
+            //     })
+            //     .catch((err) => {
+            //         const s = Status.from('permissions.error', req, err);
+            //         return s.send(res);
+            //     })
         }
 
         return fn as NextFunction;
@@ -239,11 +216,11 @@ export default class Account {
     static notSignedIn(req: Request, res: Response, next: NextFunction) {
         const { session: { account } } = req;
 
-        if (!account) {
-            return Status.from('account.serverError', req).send(res);
-        }
+        // if (!account) {
+        //     return Status.from('account.serverError', req).send(res);
+        // }
 
-        if (account.username !== 'guest') {
+        if (!!account) {
             return Status.from('account.loggedIn', req).send(res);
         }
 
@@ -251,11 +228,7 @@ export default class Account {
     }
 
     static async all(): Promise<Account[]> {
-        const query = `
-            SELECT * FROM Accounts
-        `;
-
-        const data = await MAIN.all(query);
+        const data = await MAIN.all('accounts');
         return data.map((a: AccountObject) => new Account(a));
     }
 
@@ -278,7 +251,7 @@ export default class Account {
             .toString('hex');
     }
 
-    static valid(str: string): boolean {
+    static valid(str: string, chars: string[] = []): boolean {
         const allowedCharacters = [
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
             'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
@@ -288,13 +261,41 @@ export default class Account {
             '?', '/', '|', ',', '.', '~', '`'
         ];
 
-        return str
+        allowedCharacters.push(...chars);
+
+        const invalidChars:string[] = [];
+
+        let valid = str
             .toLowerCase()
             .split('')
-            .every(char => allowedCharacters.includes(char));
+            .every(char => {
+                const validChar = allowedCharacters.includes(char);
+                if (!validChar) invalidChars.push(char);
+                return validChar;
+            });
+
+        if (!valid) console.log('Invalid characters:', invalidChars);
+    
+
+        // test for bad words
+        const filtered = new Filter().clean(str);
+
+        if (filtered !== str) {
+            valid = false;
+            invalidChars.push(...str.split(' ').filter((word, i) => word !== filtered.split(' ')[i]));
+        }
+
+
+
+        if (!valid) {
+            console.log('Invalid characters/words:', invalidChars);
+        }
+
+
+        return valid;
     }
 
-    static async create(username: string, password: string, email: string, name: string): Promise<AccountStatus> {
+    static async create(username: string, password: string, email: string, firstName: string, lastName: string): Promise<AccountStatus> {
         if (await Account.fromUsername(username)) return AccountStatus.usernameTaken;
         if (await Account.fromEmail(email)) return AccountStatus.emailTaken;
 
@@ -303,7 +304,8 @@ export default class Account {
         if (!valid(username)) return AccountStatus.invalidUsername;
         if (!valid(password)) return AccountStatus.invalidPassword;
         if (!valid(email)) return AccountStatus.invalidEmail;
-        if (!valid(name)) return AccountStatus.invalidName;
+        if (!valid(firstName)) return AccountStatus.invalidName;
+        if (!valid(lastName)) return AccountStatus.invalidName;
 
         const emailValid = await validate({ email })
             .then((results) => !!results.valid)
@@ -313,46 +315,26 @@ export default class Account {
 
         const { salt, key } = Account.newHash(password);
 
-        const query = `
-            INSERT INTO Accounts (
-                username,
-                key,
-                salt,
-                info,
-                roles,
-                name,
-                email,
-                verified
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?
-            )
-        `;
 
-        await MAIN.run(query, [
+        await MAIN.run('new-account', [
             username,
             key,
             salt,
             JSON.stringify({}),
-            JSON.stringify([]),
-            name,
+            firstName,
+            lastName,
             email,
-            0
+            false
         ]);
 
+        Account.fromUsername(username)
+            .then((a) => {
+                if (!a) return; // should never happen
+                a.sendVerification();
+            })
+            .catch(console.error);
+
         return AccountStatus.created;
-    }
-
-    static async verify(username: string): Promise<AccountStatus> {
-        const account = await Account.fromUsername(username);
-        if (!account) return AccountStatus.notFound;
-
-        return account.verify();
-    }
-
-    static async unVerify(username: string): Promise<AccountStatus> {
-        const account = await Account.fromUsername(username);
-        if (!account) return AccountStatus.notFound;
-        return account.unVerify();
     }
 
     // static async reject(username: string): Promise<AccountStatus> {}
@@ -361,30 +343,10 @@ export default class Account {
         const account = await Account.fromUsername(username);
         if (!account) return AccountStatus.notFound;
 
-        const query = `
-            DELETE FROM Accounts
-            WHERE username = ?
-        `;
+        await MAIN.run('delete-account', [username]);
 
-        await MAIN.run(query, [username]);
-
-        return AccountStatus.success;
+        return AccountStatus.removed;
     }
-
-    static async addRole(username: string, ...role: string[]): Promise<AccountStatus> {
-        const account = await Account.fromUsername(username);
-        if (!account) return AccountStatus.invalidUsername;
-        return account.addRole(...role);
-    }
-
-    static async removeRole(username: string, ...role: string[]): Promise<AccountStatus> {
-        const account = await Account.fromUsername(username);
-        if (!account) return AccountStatus.invalidUsername;
-        return account.removeRole(...role);
-    }
-
-
-
 
 
 
@@ -407,121 +369,257 @@ export default class Account {
     key: string;
     salt: string;
     info: AccountInfo;
-    roles: string[];
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
-    verified: boolean;
     passwordChange?: string|null;
-    tatorBucks: number;
     discordLink?: DiscordLink;
+    picture?: string;
+    verified: number;
+    verification?: string;
+    emailChange?: {
+        email: string;
+        date: number;
+    } | null;
 
     constructor(obj: AccountObject) {
         this.username = obj.username;
         this.key = obj.key;
         this.salt = obj.salt;
         this.info = JSON.parse(obj.info) as AccountInfo;
-        this.roles = JSON.parse(obj.roles) as string[];
-        this.name = obj.name;
+        this.firstName = obj.firstName;
+        this.lastName = obj.lastName;
         this.email = obj.email;
-        this.verified = !!obj.verified;
         this.passwordChange = obj.passwordChange;
-        this.tatorBucks = obj.tatorBucks;
         this.discordLink = JSON.parse(obj.discordLink || '{}') as DiscordLink;
+        this.picture = obj.picture;
+        this.verified = obj.verified;
+        this.verification = obj.verification;
+
+        if (obj.emailChange) {
+            this.emailChange = JSON.parse(obj.emailChange) as {
+                email: string;
+                date: number;
+            };
+        }
     }
 
-    get safe() {
-        return {
-            username: this.username,
-            name: this.name,
-            email: this.email,
-            verified: this.verified,
-            tatorBucks: this.tatorBucks,
-            discordLink: this.discordLink
-        };
+
+
+    async verify() {
+        if (this.emailChange) {
+            const { email, date } = this.emailChange;
+            const now = Date.now();
+
+            // 30 minutes
+            if (now - date > 1000 * 60 * 30) {
+                return AccountStatus.emailChangeExpired;
+            }
+
+            await MAIN.run('change-email', [email, this.username]);
+            this.email = email;
+            delete this.emailChange;
+
+            return AccountStatus.verified;
+        }
+
+
+        await MAIN.run('verify', [this.username]);
+        this.verified = 1;
+        delete this.verification;
+
+        return AccountStatus.verified;
     }
 
-    async addRole(...role: string[]): Promise<AccountStatus> {
-        const query = `
-            UPDATE Accounts
-            SET roles = ?
-            WHERE username = ?
-        `;
 
-        this.roles.push(...role);
-        this.roles = this.roles.filter((r, i) => this.roles.indexOf(r) === i); // Remove duplicates
-        await MAIN.run(query, [JSON.stringify(this.roles), this.username]);
+    async sendVerification() {
+        const key = uuid();
 
-        return AccountStatus.success;
-    }
+        await MAIN.run('set-verification', [key, this.username]);
 
-    async removeRole(...role: string[]): Promise<AccountStatus> {
-        const query = `
-            UPDATE Accounts
-            SET roles = ?
-            WHERE username = ?
-        `;
-
-        this.roles = this.roles.filter(r => !role.includes(r));
-        await MAIN.run(query, [JSON.stringify(this.roles), this.username]);
-
-        return AccountStatus.success;
-    }
-
-    async verify(): Promise<AccountStatus> {
-        if (this.verified) return AccountStatus.alreadyVerified;
-
-        const query = `
-            UPDATE Accounts
-            SET verified = ?
-            WHERE username = ?
-        `;
-
-        await MAIN.run(query, [1, this.username]);
-
-        const e = new Email(this.email, 'Account Verified', EmailType.link, {
+        const email = new Email(this.email, 'Verify your account', EmailType.link, {
             constructor: {
-                title: 'Account Verified',
-                message: 'Please click the link below to go to the login page',
-                link: `${process.env.DOMAIN}/account/sign-in`,
-                linkText: 'Sign In'
+                link: `${process.env.DOMAIN}/account/verify/${key}`,
+                linkText: 'Click here to verify your account',
+                title: 'Verify your account',
+                message: 'Click the button below to verify your account'
             }
         });
 
-        this.verified = true;
+        return email.send();
+    }
+
+
+    async safe(include?: {
+        roles?: boolean;
+        memberInfo?: boolean;
+        permissions?: boolean;
+        email?: boolean;
+    }) {
+        return {
+            username: this.username,
+            firstName: this.firstName,
+            lastName: this.lastName,
+            picture: this.picture,
+            email: include?.email ? this.email : undefined,
+            roles: include?.roles ? await this.getRoles() : [],
+            memberInfo: include?.memberInfo ? await this.getMemberInfo() : undefined,
+            permissions: include?.permissions ? await this.getPermissions() : []
+        };
+    }
+
+
+
+
+
+    async getMemberInfo(): Promise<MemberInfo | undefined> {
+        return Member.get(this.username)
+            .then((member) => member?.safe());
+    }
+
+    async sendEmail(subject: string, type: EmailType, options: EmailOptions) {
+        const email = new Email(this.email, subject, type, options);
+        return email.send();
+    }
+
+
+
+
+
+
+
+    async getRoles(): Promise<Role[]> {
+        const data = await MAIN.all('account-roles', [this.username]);
+
+        return Promise.all(data.map(({ role }) => {
+            return Role.fromName(role);
+        }));
+    }
+
+    async addRole(...roles: string[]): Promise<AccountStatus[]> {
+        return Promise.all(roles.map(async (role) => {
+            const r = await Role.fromName(role);
+            if (!r) return AccountStatus.noRole;
+
+            if ((await this.getRoles()).find(_r => _r.name === r.name)) {
+                return AccountStatus.hasRole;
+            }
+
+            await MAIN.run('add-account-role', [this.username, role]);
+
+            return AccountStatus.roleAdded;
+        }));
+    }
+
+    async removeRole(...role: string[]): Promise<AccountStatus[]> {
+        return Promise.all(role.map(async(role) => {
+            const r = await Role.fromName(role);
+            if (!r) return AccountStatus.noRole;
+
+            if (!(await this.getRoles()).find(_r => _r.name === r.name)) {
+                return AccountStatus.noRole;
+            }
+
+            await MAIN.run('remove-account-role', [this.username, role]);
+
+            return AccountStatus.roleRemoved;
+        }));
+    }
+
+
+
+
+
+
+    async changePicture(id: string) {
+        if (this.picture) {
+            console.log('deleting', path.resolve(__dirname, '../../uploads', this.picture));
+            if (fs.existsSync(path.resolve(__dirname, '../../uploads', this.picture))) {
+                await fs.promises.rm(path.resolve(__dirname, '../../uploads', this.picture));
+            }
+        }
+
+        await MAIN.run('update-picture', [id, this.username]);
+        this.picture = id;
+
         return AccountStatus.success;
     }
 
-    async unVerify(): Promise<AccountStatus> {
-        if (!this.verified) return AccountStatus.notVerified;
+
+
+    async getPermissions(): Promise<Permission[]> {
+        const roles = await this.getRoles();
+        return (await Promise.all(roles.map((role) => role.getPermissions()))).flat();
+    }
+
+
+
+    async change(property: AccountDynamicProperty, to: string): Promise<AccountStatus> {
+        if (property !== AccountDynamicProperty.picture &&!Account.valid(to)) {
+            return AccountStatus.invalidName;
+        }
 
         const query = `
             UPDATE Accounts
-            SET verified = ?
-            WHERE username = ?
+            SET ${property} = ?
+            WHERE username = ?        
         `;
 
-        await MAIN.run(query, [0, this.username]);
+        await MAIN.unsafe.run(query, [to, this.username]);
 
-        this.verified = false;
+        this[property] = to;
+
         return AccountStatus.success;
     }
 
+
+    async changeUsername(username: string): Promise<AccountStatus> {
+        const a = await Account.fromUsername(username);
+        if (a) return AccountStatus.usernameTaken;
+
+        await MAIN.run('change-username', [username, this.username]);
+
+        this.username = username;
+
+        return AccountStatus.success;
+    }
+
+
+    
+
+
+    
     testPassword(password: string): boolean {
         const hash = Account.hash(password, this.salt);
         return hash === this.key;
+    }
+
+
+    async changeEmail(email: string) {
+        const exists = await Account.fromEmail(email);
+
+        if (exists) return AccountStatus.emailTaken;
+
+        this.emailChange = {
+            email,
+            date: Date.now()
+        }
+
+        MAIN.run('request-email-change', [
+            JSON.stringify(this.emailChange),
+            this.username
+        ]);
+
+        this.sendVerification();
+
+        return AccountStatus.checkEmail;
     }
 
     async requestPasswordChange(): Promise<string> {
         const key = uuid();
         this.passwordChange = key;
 
-        const query = `
-            UPDATE Accounts
-            SET passwordChange = ?
-            WHERE username = ?
-        `;
-
-        await MAIN.run(query, [key, this.username]);
+        await MAIN.run('request-password-change', [key, this.username]);
         return key;
     }
 
@@ -529,36 +627,17 @@ export default class Account {
         if (key !== this.passwordChange) return AccountStatus.passwordChangeInvalid;
 
         const { salt, key: newKey } = Account.newHash(password);
-
-        const query = `
-            UPDATE Accounts
-            SET key = ?, salt = ?, passwordChange = ?
-            WHERE username = ?
-        `;
-
-        await MAIN.run(query, [newKey, salt, null, this.username]);
+        await MAIN.run('change-password', [newKey, salt, null, this.username]);
         this.key = newKey;
         this.salt = salt;
         this.passwordChange = null;
 
-        return AccountStatus.success;
+        return AccountStatus.passwordChangeSuccess;
     }
 
-    async getPermissions(): Promise<PermissionsObject> {
-        const roles = await Promise.all(this.roles.map(r => Role.fromName(r)));
 
-        let perms = roles.reduce((acc, role) => {
-            acc.permissions.push(...role.permissions);
-            acc.rank = Math.min(acc.rank, role.rank);
-            return acc;
-        }, {
-            permissions: [],
-            rank: Infinity
-        } as PermissionsObject);
-
-        perms.permissions = perms.permissions
-            .filter((p, i) => perms.permissions.indexOf(p) === i); // Remove duplicates
-
-        return perms;
+    async getRank(): Promise<number> {
+        const roles = await this.getRoles();
+        return Math.min(...roles.map((r) => r.rank));
     }
 };

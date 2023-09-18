@@ -24,15 +24,13 @@
                 "init": "info TEXT",
                 "default": "{}"
             },
-            "roles": {
-                "type": "json",
+            "firstName": {
+                "type": "string",
                 "edit": true,
-                "jsonType": "expandable",
-                "description": "Roles of the account",
-                "init": "roles TEXT",
-                "default": "[]"
+                "description": "Name of the account",
+                "init": "name TEXT NOT NULL"
             },
-            "name": {
+            "lastName": {
                 "type": "string",
                 "edit": true,
                 "description": "Name of the account",
@@ -44,17 +42,47 @@
                 "description": "Email for the account",
                 "init": "email TEXT NOT NULL"
             },
-            "verified": {
-                "type": "string",
-                "edit": true,
-                "description": "If the account has been verified (1 if it is)",
-                "init": "verified INTEGER NOT NULL"
-            },
             "passwordChange": {
                 "type": "string",
                 "edit": false,
                 "description": "Password change request id",
                 "init": "passwordChange TEXT"
+            },
+            "picture": {
+                "type": "string",
+                "edit": true,
+                "description": "Profile picture of the account",
+                "init": "picture TEXT"
+            },
+            "verified": {
+                "type": "boolean",
+                "edit": true,
+                "description": "Whether the account is verified",
+                "init": "verified INTEGER NOT NULL"
+            },
+            "verification": {
+                "type": "string",
+                "edit": false,
+                "description": "Verification id",
+                "init": "verification TEXT"
+            },
+            "emailChange": {
+                "type": "json",
+                "edit": false,
+                "description": "Email change information",
+                "init": "emailChange TEXT"
+            },
+            "passwordChangeDate": {
+                "type": "date",
+                "edit": false,
+                "description": "Time of last password change",
+                "init": "passwordChangeDate INTEGER"
+            },
+            "phoneNumber": {
+                "type": "string",
+                "edit": true,
+                "description": "Phone number of the account",
+                "init": "phoneNumber TEXT"
             }
         },
         "rows": [{
@@ -62,79 +90,148 @@
             "key": "",
             "salt": "",
             "info": {},
-            "roles": [
-                "admin"
-            ],
-            "name": "Admin",
+            "firstName": "Admin",
+            "lastName": "Account",
             "email": "",
-            "verified": 1
-        }, {
-            "username": "scout",
-            "key": "",
-            "salt": "",
-            "info": {},
-            "roles": [
-                "scout"
-            ],
-            "name": "Scout",
-            "email": "",
-            "verified": 1
-        }, {
-            "username": "viewer",
-            "key": "",
-            "salt": "",
-            "info": {},
-            "roles": [
-                "viewer"
-            ],
-            "name": "Viewer",
-            "email": "",
-            "verified": 1
-        }, {
-            "username": "mentor",
-            "key": "",
-            "salt": "",
-            "info": {},
-            "roles": [
-                "mentor"
-            ],
-            "name": "Mentor",
-            "email": "",
-            "verified": 1
+            "verified": true
         }, {
             "username": "developer",
             "key": "",
             "salt": "",
             "info": {},
-            "roles": [
-                "developer"
-            ],
-            "name": "Developer",
+            "firstName": "Developer",
+            "lastName": "Account",
             "email": "",
-            "verified": 1
-        }, {
-            "username": "unverified",
-            "key": "",
-            "salt": "",
-            "info": {},
-            "roles": [
-                "user"
-            ],
-            "name": "Unverified",
-            "email": "",
-            "verified": 0
+            "verified": true
         }, {
             "username": "user",
             "key": "",
             "salt": "",
             "info": {},
-            "roles": [
-                "user"
-            ],
-            "name": "User",
+            "firstName": "User",
+            "lastName": "Account",
             "email": "",
-            "verified": 1
+            "verified": true
+        }, {
+            "username": "board",
+            "key": "",
+            "salt": "",
+            "info": {},
+            "firstName": "Board",
+            "lastName": "Account",
+            "email": "",
+            "verified": true
+        }, {
+            "username": "guest",
+            "key": "",
+            "salt": "",
+            "info": {},
+            "firstName": "Guest",
+            "lastName": "Account",
+            "email": "",
+            "verified": false
         }],
         "description": "All accounts in the system"
+    },
+
+
+
+    // 1:1 with accounts that are verified
+    "MemberInfo": {
+        "columns": {
+            "username": {
+                "type": "string",
+                "primaryKey": true,
+                "description": "The username of the account",
+                "init": "username TEXT NOT NULL UNIQUE"
+            },
+            "title": {
+                "type": "string",
+                "edit": true,
+                "description": "Title of the member",
+                "init": "title TEXT"
+            },
+            "status": {
+                "type": "number",
+                "edit": true,
+                "description": "Whether the member is verified",
+                "init": "verified INTEGER NOT NULL"
+            }
+        }
+    },
+
+
+
+
+
+
+    "Roles": {
+        "columns": {
+            "name": {
+                "type": "string",
+                "primaryKey": true,
+                "edit": true,
+                "description": "The name of the role",
+                "init": "name TEXT NOT NULL UNIQUE"
+            },
+            "description": {
+                "type": "string",
+                "edit": true,
+                "description": "Description of the role",
+                "init": "description TEXT"
+            },
+            "rank": {
+                "type": "number",
+                "edit": true,
+                "description": "Rank of the role, used for permissions",
+                "init": "rank INTEGER"
+            }
+        },
+        "rows": [{
+            "name": "admin",
+            "description": "Administrator",
+            "rank": 0
+        }, {
+            "name": "board",
+            "description": "Board",
+            "rank": 20
+        }, {
+            "name": "member",
+            "description": "Member",
+            "rank": 30
+        }, {
+            "name": "developer",
+            "description": "Developer",
+            "rank": 10
+        }, {
+            "name": "user",
+            "description": "User",
+            "rank": 100
+        }]
+    },
+
+
+    // many:many with accounts
+    "AccountRoles": {
+        "columns": {
+            "username": {
+                "type": "string",
+                "description": "The username of the account",
+                "init": "username TEXT NOT NULL"
+            },
+            "role": {
+                "type": "string",
+                "description": "The name of the role",
+                "init": "role TEXT NOT NULL"
+            }
+        },
+        "rows": [{
+            "username": "tsaxking",
+            "role": "admin"
+        }, {
+            "username": "tsaxking",
+            "role": "developer"
+        }],
+        "type": "linking"
     }
 }

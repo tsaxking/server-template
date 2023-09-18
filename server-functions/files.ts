@@ -1,4 +1,4 @@
-import { NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
@@ -8,6 +8,7 @@ import callsite from 'callsite';
 import { workerData } from 'worker_threads';
 import ObjectsToCsv from 'objects-to-csv';
 import { config } from 'dotenv';
+
 
 
 config();
@@ -21,6 +22,25 @@ config();
  * @type {*}
  */
 const env = workerData?.mode || process.argv[2] || 'dev';
+
+
+const filepathBuilder = (file: string, ext: string, parentFolder: string): string => {
+    let output: string;
+    if (!file.endsWith(ext)) file += ext;
+
+    if (file.startsWith('.')) {
+        // use callsite
+        const stack = callsite(),
+            requester = stack[1].getFileName(),
+            requesterDir = path.dirname(requester);
+        output =  path.resolve(requesterDir, file);
+    } else {
+        output = path.resolve(__dirname, parentFolder, ...file.split('/'));
+    }
+
+
+    return output;
+};
 
 
 /**
@@ -38,17 +58,7 @@ const env = workerData?.mode || process.argv[2] || 'dev';
  * 
  */
 export function getJSONSync(file: string): any {
-    let p: string = file;
-    if (!file.includes('.json')) file +='.json';
-    if (!(file.startsWith('.'))) p = path.resolve('./jsons', file);
-    else {
-        const stack = callsite(),
-            requester = stack[1].getFileName(),
-            requesterDir = path.dirname(requester);
-        p = path.resolve(requesterDir, p);
-    }
-    
-    p = path.resolve(__dirname, p);
+    const p = filepathBuilder(file, '.json', '../jsons');
 
     if (!fs.existsSync(p)) {
         console.error('Error reading JSON file: ' + p, 'file does not exist. Input: ', file);
@@ -85,17 +95,7 @@ export function getJSONSync(file: string): any {
  */
 export function getJSON(file: string): Promise<any> {
     return new Promise((res, rej) => {
-        let p: string = file;
-        if (!file.includes('.json')) file +='.json';
-        if (!(file.startsWith('.'))) p = path.resolve('./jsons', file);
-        else {
-            const stack = callsite(),
-                requester = stack[1].getFileName(),
-                requesterDir = path.dirname(requester);
-            p = path.resolve(requesterDir, p);
-        }
-        
-        p = path.resolve(__dirname, p);
+        const p = filepathBuilder(file, '.json', '../jsons');
     
         if (!fs.existsSync(p)) {
             console.error('Error reading JSON file: ' + p, 'file does not exist. Input: ', file);
@@ -136,17 +136,7 @@ export function getJSON(file: string): Promise<any> {
  * 
  */
 export function saveJSONSync(file: string, data: any) {
-    let p: string = file;
-    if (!file.includes('.json')) file +='.json';
-    if (!(file.startsWith('.'))) p = path.resolve('./jsons', file);
-    else {
-        const stack = callsite(),
-            requester = stack[1].getFileName(),
-            requesterDir = path.dirname(requester);
-        p = path.resolve(requesterDir, p);
-    }
-    
-    p = path.resolve(__dirname, p);
+    const  p = filepathBuilder(file, '.json', '../jsons');
 
     try {
         JSON.stringify(data);
@@ -172,17 +162,8 @@ export function saveJSONSync(file: string, data: any) {
  */
 export function saveJSON(file: string, data: any): Promise<boolean> {
     return new Promise((res, rej) => {
-        let p: string = file;
-        if (!file.includes('.json')) file +='.json';
-        if (!(file.startsWith('.'))) p = path.resolve('./jsons', file);
-        else {
-            const stack = callsite(),
-                requester = stack[1].getFileName(),
-                requesterDir = path.dirname(requester);
-            p = path.resolve(requesterDir, p);
-        }
-        
-        p = path.resolve(__dirname, p);
+        const  p = filepathBuilder(file, '.json', '../jsons');
+
         try {
             JSON.stringify(data);
         } catch (e) {
@@ -209,6 +190,8 @@ export function saveJSON(file: string, data: any): Promise<boolean> {
 let builds: any = workerData?.builds || {};
 const buildJSON = getJSONSync('../build/build.json');
 !buildJSON.buildDir.endsWith('/') && (buildJSON.buildDir += '/'); // make sure it ends with a slash 
+
+// console.log(workerData.builds);
 
 /**
  * Parses the html and adds the builds
@@ -374,20 +357,11 @@ type ConstructorOptions = {
  * @returns {string|boolean} false if there is an error, otherwise the html
  */
 export function getTemplateSync(file: string, options?: ConstructorOptions): string|boolean {
-    if (templates.has(file)) {
-        return templates.get(file) as string;
-    }
-    let p: string = file;
-    if (!file.includes('.html')) file +='.html';
-    if (!(file.startsWith('.'))) p = path.resolve('./templates', file);
-    else {
-        const stack = callsite(),
-            requester = stack[1].getFileName(),
-            requesterDir = path.dirname(requester);
-        p = path.resolve(requesterDir, p);
-    }
-    
-    p = path.resolve(__dirname, p);
+    // if (templates.has(file)) {
+    //     return templates.get(file) as string;
+    // }
+
+    const p = filepathBuilder(file, '.html', '../templates');
 
     if (!fs.existsSync(p)) {
         console.error(`Template ${p} does not exist. Input:`, file);
@@ -396,7 +370,7 @@ export function getTemplateSync(file: string, options?: ConstructorOptions): str
 
     let data = fs.readFileSync(p, 'utf8');
     data = runBuilds(data);
-    templates.set(file, data);
+    // templates.set(file, data);
     return options ? render(data, options) : data;
 };
 
@@ -409,20 +383,11 @@ export function getTemplateSync(file: string, options?: ConstructorOptions): str
  */
 export function getTemplate(file: string, options?: ConstructorOptions): Promise<string|boolean> {
     return new Promise((res, rej) => {
-        if (templates.has(file)) {
-            return res(templates.get(file) as string);
-        }
-        let p: string = file;
-        if (!file.includes('.html')) file +='.html';
-        if (!(file.startsWith('.'))) p = path.resolve('./templates', file);
-        else {
-            const stack = callsite(),
-                requester = stack[1].getFileName(),
-                requesterDir = path.dirname(requester);
-            p = path.resolve(requesterDir, p);
-        }
+        // if (templates.has(file)) {
+        //     return res(templates.get(file) as string);
+        // }
         
-        p = path.resolve(__dirname, p);
+        const p = filepathBuilder(file, '.html', '../templates');
     
         if (!fs.existsSync(p)) {
             console.error(`Template ${p} does not exist. Input:`, file);
@@ -432,7 +397,7 @@ export function getTemplate(file: string, options?: ConstructorOptions): Promise
         fs.readFile(p, 'utf8', (err, data) => {
             if (err) return rej(err);
             data = runBuilds(data);
-            templates.set(file, data);
+            // templates.set(file, data);
             res(options ? render(data, options) : data);
         });
     });
@@ -447,18 +412,7 @@ export function getTemplate(file: string, options?: ConstructorOptions): Promise
  * @returns {boolean} whether the file was saved successfully
  */
 export function saveTemplateSync(file: string, data: string) {
-    let p: string = file;
-    if (!file.includes('.html')) file +='.html';
-    if (!(file.startsWith('.'))) p = path.resolve('./templates', file);
-    else {
-        const stack = callsite(),
-            requester = stack[1].getFileName(),
-            requesterDir = path.dirname(requester);
-        p = path.resolve(requesterDir, p);
-    }
-    
-    p = path.resolve(__dirname, p);
-
+    const p = filepathBuilder(file, '.html', '../templates');
 
     fs.writeFileSync(p, data, 'utf8');
     return true;
@@ -474,18 +428,7 @@ export function saveTemplateSync(file: string, data: string) {
  */
 export function saveTemplate(file: string, data: string): Promise<boolean> {
     return new Promise((res, rej) => {
-        let p: string = file;
-        if (!file.includes('.html')) file +='.html';
-        if (!(file.startsWith('.'))) p = path.resolve('./templates', file);
-        else {
-            const stack = callsite(),
-                requester = stack[1].getFileName(),
-                requesterDir = path.dirname(requester);
-            p = path.resolve(requesterDir, p);
-        }
-        
-        p = path.resolve(__dirname, p);
-
+        const p = filepathBuilder(file, '.html', '../templates');
 
         fs.writeFile(p, data, 'utf8', err => {
             if (err) return rej(err);
@@ -608,17 +551,6 @@ export function formatBytes(bytes: number, decimals: number = 2): { string: stri
 /**
  * Description placeholder
  *
- * @typedef {FileStreamOptions}
- */
-type FileStreamOptions = {
-    maxFileSize?: number;
-    extensions?: string[];
-}
-
-
-/**
- * Description placeholder
- *
  * @typedef {CustomHeaderRequest}
  */
 type CustomHeaderRequest = Request & {
@@ -643,82 +575,6 @@ type CustomResponse = Response & {
     json: (data: any) => void;
 }
 
-/**
- * Description placeholder
- *
- * @param {FileStreamOptions} opts
- * @returns {(req: any, res: any, next: any) => unknown}
- */
-export const fileStream = (opts: FileStreamOptions) => {
-    return async(req: CustomHeaderRequest, res: CustomResponse, next: NextFunction) => {
-        let { maxFileSize, extensions } = opts;
-        maxFileSize = maxFileSize || 1000000;
-
-        const generateFileId = () => {
-            return uuid() + '-' + Date.now();
-        }
-
-        let fileId = generateFileId();
-        let {
-            headers: {
-                'x-content-type': contentType,
-                'x-file-name': fileName,
-                'x-file-size': fileSize,
-                'x-file-type': fileType,
-                'x-file-ext': fileExt
-            }
-        } = req;
-
-        if (maxFileSize && +fileSize > maxFileSize) {
-            console.log('File size is too large', formatBytes(+fileSize), formatBytes(maxFileSize));
-            return res.json({
-                error: 'File size too large'
-            });
-        }
-
-        if (extensions && !extensions.includes(fileExt)) {
-            console.log('File type is not allowed', fileExt, extensions);
-        }
-
-        if (!fileExt.startsWith('.')) fileExt = '.' + fileExt;
-
-
-        // never overwrite files
-        while (fs.existsSync(path.resolve(__dirname, '../uploads', fileId + fileExt))) {
-            fileId = generateFileId();
-        }
-
-        const file = fs.createWriteStream(path.resolve(__dirname, '../uploads', fileId + fileExt));
-
-        let total = 0;
-        req.on('data', (chunk) => {
-            file.write(chunk);
-            total += chunk.length;
-            console.log('Uploaded', formatBytes(total), formatBytes(+fileSize), `(${Math.round(total / +fileSize * 100)}% )`);
-        });
-
-        req.on('end', () => {
-            file.end();
-            req.file = {
-                id: fileId,
-                name: fileName,
-                size: fileSize,
-                type: fileType,
-                ext: fileExt,
-                contentType
-            }
-            next();
-        });
-
-        req.on('error', (err) => {
-            console.log(err);
-
-            res.json({
-                error: 'Error uploading file: ' + fileName
-            })
-        });
-    }
-}
 
 
 /**

@@ -129,12 +129,15 @@ export class Status {
             data = JSON.stringify(data);
         } catch (e) {
             console.error('Unable to stringify data for status message.', e);
+            console.log('Data:', data);
             data = undefined;
         }
 
 
         const message = messages[id];
         if (!message) {
+            console.log('Unknown status message requested.', id);
+
             return new Status(
                 'Unknown Error',
                 'An unknown error has occurred.',
@@ -144,7 +147,7 @@ export class Status {
                 false,
                 req,
                 data
-            )
+            );
         }
 
         return new Status(
@@ -180,6 +183,7 @@ export class Status {
             username: request.session.account?.username,
             ip: request.session.ip,
             email: request.session.account?.email,
+            request: request.originalUrl,
             title,
             code,
             data: data == '{}' ? 'No data provided.' : data
@@ -188,36 +192,36 @@ export class Status {
 
 
         // Send email to admins if error
-        if (status === ColorCode.majorError && process.env.SEND_STATUS_EMAILS === 'TRUE') {
-            Account.fromRole('admin')
-                .then(admins => {
-                    const email = new Email(
-                        admins.map(admin => admin.email),
-                        'Error: ' + title,
-                        EmailType.error,
-                        {
-                            constructor: {
-                                title,
-                                message,
-                                code,
-                                sessionId: request.session.id,
-                                username: request.session.account?.username,
-                                ip: request.session.ip,
-                                email: request.session.account?.email,
-                            }
-                        });
+        // if (status === ColorCode.majorError && process.env.SEND_STATUS_EMAILS === 'TRUE') {
+        //     Account.fromRole('admin')
+        //         .then(admins => {
+        //             const email = new Email(
+        //                 admins.map(admin => admin.email),
+        //                 'Error: ' + title,
+        //                 EmailType.error,
+        //                 {
+        //                     constructor: {
+        //                         title,
+        //                         message,
+        //                         code,
+        //                         sessionId: request.session.id,
+        //                         username: request.session.account?.username,
+        //                         ip: request.session.ip,
+        //                         email: request.session.account?.email,
+        //                     }
+        //                 });
 
-                    email.send()
-                        .catch(console.error);
-                })
-                .catch(console.error);
-        }
+        //             email.send()
+        //                 .catch(console.error);
+        //         })
+        //         .catch(console.error);
+        // }
     }
 
     get html() {
         return getTemplateSync('status', {
             ...this,
-            data: this.data ? JSON.parse(this.data) : 'No data provided.'
+            data: this.data ? JSON.stringify(this.data) : 'No data provided.'
         });
     }
 
@@ -228,7 +232,8 @@ export class Status {
             status: this.status,
             code: this.code,
             instructions: this.instructions,
-            data: JSON.parse(this.data || '{}')
+            data: JSON.parse(this.data || '{}'),
+            redirect: this.redirect
         }
     }
 

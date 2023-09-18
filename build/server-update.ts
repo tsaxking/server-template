@@ -3,50 +3,77 @@ import { DB, MAIN } from '../server-functions/databases';
 import * as path from 'path';
 import * as fs from 'fs';
 import { config } from 'dotenv';
-import ts from 'typescript';
+import { spawn } from 'child_process';
+import { uuid } from '../server-functions/structure/uuid';
 
-config();
-
-const start = Date.now();
-const args = workerData?.args || process.argv.slice(2);
-console.log('Update args:', args);
-console.log('\x1b[41mThis may take a few seconds, please wait...\x1b[0m');
-
-const runTs = async (filePath: string): Promise<any> => {
-    return new Promise(async (res, rej) => {
-        const tsConfig = await getJSON(path.resolve(__dirname, filePath, './tsconfig.json'));
-
-        const program = ts.createProgram([filePath], {
-            ...tsConfig.compilerOptions,
-            noEmitOnError: true
-        });
-        const emitResult = program.emit();
+enum Colors {
+    Reset = '\x1b[0m',
+    Bright = '\x1b[1m',
+    Dim = '\x1b[2m',
+    Underscore = '\x1b[4m',
+    Blink = '\x1b[5m',
+    Reverse = '\x1b[7m',
+    Hidden = '\x1b[8m',
     
-        const allDiagnostics = ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
-    
-        allDiagnostics.forEach(diagnostic => {
-            if (diagnostic.file) {
-                const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start!);
-                const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-                console.log(`${diagnostic.file.fileName} (${line + 1},${character + 1}): ${message}`);
-            } else {
-                console.log(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
-            }
-        });
-    
-        const exitCode = emitResult.emitSkipped ? 1 : 0;
-    
-        if (exitCode !== 0) {
-            console.error(new Error('There was an error compiling the project'));
-        }
+    FgBlack = '\x1b[30m',
+    FgRed = '\x1b[31m',
+    FgGreen = '\x1b[32m',
+    FgYellow = '\x1b[33m',
+    FgBlue = '\x1b[34m',
+    FgMagenta = '\x1b[35m',
+    FgCyan = '\x1b[36m',
 
-        res(null);
-    });
+    BgBlack = '\x1b[40m',
+    BgRed = '\x1b[41m',
+    BgGreen = '\x1b[42m',
+    BgYellow = '\x1b[43m',
+    BgBlue = '\x1b[44m',
+    BgMagenta = '\x1b[45m',
+    BgCyan = '\x1b[46m'
 }
 
 
+const log = (...args: any[]) => {
+    console.log(Colors.FgGreen, '[Server-Update.ts]', Colors.Reset, ...args);
+};
+
+const error = (...args: any[]) => {
+    console.error(Colors.FgRed, '[Server-Update.ts]', Colors.Reset, ...args);
+};
+
+config();
+
+const args = workerData?.args || process.argv.slice(2);
+log('Update args:', args);
+log('\x1b[41mThis may take a few seconds, please wait...\x1b[0m');
+
+const runTs = async (filePath: string): Promise<any> => {
+    return new Promise(async (res, rej) => {
+        const child = spawn('tsc', [], {
+            stdio: 'pipe',
+            shell: true,
+            cwd: filePath,
+            env: process.env
+        });
+
+        child.on('error', error);
+        child.stdout.on('data', (data) => {
+            log(data.toString());
+        });
+
+        child.stderr.on('data', (data) => {
+            error(data.toString());
+        });
+
+        child.on('close', () => {   
+            res(null);
+        });
+    });
+}
+
+// get json file and removes comments
 const getJSON = (file: string): any => {
-    let p;
+    let p: string;
     if (file.includes('/') || file.includes('\\')) {
         p = file;
     }
@@ -65,7 +92,7 @@ const getJSON = (file: string): any => {
         return JSON.parse(content);
     }
     catch (e) {
-        console.error('Error parsing JSON file: ' + file, e);
+        error('Error parsing JSON file: ' + file, e);
         return false;
     }
 }
@@ -73,7 +100,10 @@ const getJSON = (file: string): any => {
 
 // make files and folders if they don't exist
 const folders: string[] = [
-    '../history'
+    '../db',
+    '../db/queries',
+    '../db/history',
+    '../uploads'
 ];
 
 
@@ -84,24 +114,25 @@ for (const folder of folders) {
     }
 }
 
-if (!fs.existsSync(path.resolve(__dirname, '../history/manifest.txt'))) {
-    fs.writeFileSync(path.resolve(__dirname, '../history/manifest.txt'), JSON.stringify({
+if (!fs.existsSync(path.resolve(__dirname, '../db/history/manifest.txt'))) {
+    fs.writeFileSync(path.resolve(__dirname, '../db/history/manifest.txt'), JSON.stringify({
         lastUpdate: Date.now(),
-        updates: []
+        updates: [],
+        version: '0.0.1'
     }, null, 4));
 }
 
 
 
-
+// creates database if it doesn't exist
 export async function initDB() {
-    console.log('Checking to see if database exists...');
+    log('Checking to see if database exists...');
 
     if (fs.existsSync(path.resolve(__dirname, '../db/main.db'))) {
-        return console.log('Database exists! :)');
+        return log('Database exists! :)');
     }
 
-    console.log('Database does not exist, creating...');
+    log('Database does not exist, creating...');
 
     fs.writeFileSync(path.resolve(__dirname, '../db/main.db'), '');
     const db = new DB('main');
@@ -118,10 +149,11 @@ enum TableStatus {
     SUCCESS
 }
 
+// builds tables if they don't exist
 async function tableTest(): Promise<{
     [key: string]: TableStatus
 }[]> {
-    console.log('Checking to see if all tables exist...');
+    log('Checking to see if all tables exist...');
 
     const tables = getJSON('tables');
 
@@ -150,7 +182,9 @@ type Table = {
     },
     rows: [],
     description: string;
+    type: 'linking' | 'data';
 }
+
 
 async function createTable(tableName: string, table: Table): Promise<TableStatus> {
     const { columns, rows, description } = table;
@@ -163,36 +197,73 @@ async function createTable(tableName: string, table: Table): Promise<TableStatus
         );
     `;
 
-    await MAIN.run(makeTableQuery);
+    await MAIN.unsafe.run(makeTableQuery);
 
     if (!columns) return TableStatus.NO_COLUMNS;
 
-    await Promise.all(Object.entries(columns).map(async ([columnName, {init}]) => {
+
+    // ensure all columns exist
+    const pragmaQuery = `
+        PRAGMA table_info("${tableName}");
+    `;
+
+    const pragmaResult = await MAIN.unsafe.all(pragmaQuery);
+
+    await Promise.all(Object.entries(columns).map(([columnName, {init}]) => {
+        const columnExists = pragmaResult.find(({ name }) => name === columnName);
+        if (columnExists) return TableStatus.EXISTS;
+
+        log(`Column ${columnName} does not exist in table ${tableName}, creating column`);
         const query = `
-            SELECT "${columnName} "
-            FROM "${tableName}"
+            ALTER TABLE "${tableName}"
+            ADD COLUMN "${columnName}" ${init}
         `;
 
-        try {
-            await MAIN.all(query);
-        } catch {
-            console.log(`Column ${columnName} does not exist in table ${tableName}, creating column`);
-            const query = `
-                ALTER TABLE "${tableName}"
-                ADD COLUMN "${columnName}" ${init}
-            `;
-
-            await MAIN.run(query);
-        }
+        return MAIN.unsafe.run(query);
     }));
 
     if (!rows) return TableStatus.SUCCESS;
 
+    // adds rows to the table
     await Promise.all(rows.map(async (row) => {
         const primaryKey = Object.keys(columns).find(columnName => columns[columnName].primaryKey);
 
         if (!primaryKey) {
-            console.log(`Table ${tableName} does not have a primary key, cannot insert row`);
+            // log(`Table ${tableName} does not have a primary key, it is likely a linking table`);
+
+            const columnsArray = Object.keys(table.columns);
+
+            const { type } = table;
+            if (type === 'linking') {
+                // log(`Table ${tableName} is a linking table, checking to see if row exists...`)
+
+                const selectQuery = `
+                    SELECT ${columnsArray.map(c => `"${c}"`).join(', ')}
+                    FROM "${tableName}"
+                    WHERE ${columnsArray.map(c => `"${c}" = ?`).join(' AND ')}
+                `;
+
+                const result = await MAIN.unsafe.get(selectQuery, columnsArray.map(c => row[c]));
+
+                if (!result) {
+                    log(`Row does not exist in table ${tableName}, inserting row...`);
+                    const insertQuery = `
+                        INSERT INTO "${tableName}" (${columnsArray.map(c => `"${c}"`).join(', ')})
+                        VALUES (${columnsArray.map(() => '?').join(', ')})
+                    `;
+
+                    await MAIN.unsafe.run(insertQuery, columnsArray.map(c => {
+                        const { type } = columns[c];
+
+                        if (type === 'json') return JSON.stringify(row[c]);
+                        return row[c];
+                    }));
+                } else {
+                    // log(`Row already exists in table ${tableName}, skipping...`);
+                }
+            }
+
+
             return;
         }
 
@@ -202,25 +273,26 @@ async function createTable(tableName: string, table: Table): Promise<TableStatus
             WHERE "${primaryKey}" = ?
         `;
 
-        const result = await MAIN.get(query, [row[primaryKey]]);
+        const result = await MAIN.unsafe.get(query, [row[primaryKey]]);
 
         if (result) {
-            console.log(`Row with primary key ${row[primaryKey]} already exists in table ${tableName}, checking for updates...`);
+            log(`Row with primary key ${row[primaryKey]} already exists in table ${tableName}, checking for updates...`);
 
+            // if the row exists, check if it needs to be updated
             if (!Object.keys(row).every(columnName => row[columnName] === result[columnName])) {
                 const deleteQuery = `
                     DELETE FROM "${tableName}"
                     WHERE "${primaryKey}" = ?
                 `;
 
-                await MAIN.run(deleteQuery, [row[primaryKey]]);
+                await MAIN.unsafe.run(deleteQuery, [row[primaryKey]]);
 
                 const insertQuery = `
                     INSERT INTO "${tableName}" (${Object.keys(row).map(k => `"${k}"`).join(', ')})
                     VALUES (${Object.keys(row).map(() => '?').join(', ')})
                 `;
 
-                await MAIN.run(insertQuery, Object.keys(row).map(k => {
+                await MAIN.unsafe.run(insertQuery, Object.keys(row).map(k => {
                     const { type } = columns[k];
 
                     if (type === 'json') return JSON.stringify(row[k]);
@@ -230,14 +302,14 @@ async function createTable(tableName: string, table: Table): Promise<TableStatus
                 return;
             }
         } else {
-            console.log(`Row with primary key ${row[primaryKey]} does not exist in table ${tableName}, inserting row...`);
+            log(`Row with primary key ${row[primaryKey]} does not exist in table ${tableName}, inserting row...`);
 
             const query = `
                 INSERT INTO "${tableName}" (${Object.keys(row).map(k => `"${k}"`).join(', ')})
                 VALUES (${Object.keys(row).map(() => '?').join(', ')})
             `;
 
-            await MAIN.run(query, Object.keys(row).map(k => {
+            await MAIN.unsafe.run(query, Object.keys(row).map(k => {
                 const { type } = columns[k];
 
                 if (type === 'json') return JSON.stringify(row[k]);
@@ -250,56 +322,190 @@ async function createTable(tableName: string, table: Table): Promise<TableStatus
     return TableStatus.SUCCESS;
 }
 
+
+type ManifestUpdate = {
+    name: string;
+    date: number;
+    type: 'major' | 'minor' | 'patch';
+}
+
+
+
 type Manifest = {
     lastUpdate: number;
-    updates: {
-        name: string;
-        date: number;
-    }[];
+    updates: ManifestUpdate[];
+    version: string;
 }
 
+const manifestLocation = path.resolve(__dirname, '../db/history/manifest.txt');
 
+const getManifest = (): Manifest => JSON.parse(
+    fs.readFileSync(
+        manifestLocation, 'utf8')
+    ) as Manifest;
+
+const saveManifest = (manifest: Manifest) => fs.writeFileSync(
+    manifestLocation, JSON.stringify(manifest, null, 4)
+);
+
+
+// run database updates
 async function runUpdates(updates: Update[]) {
-    console.log('Checking for database updates...');
+    log('Checking for database updates...');
 
-    const manifest = JSON.parse(
-        fs.readFileSync(
-            path.resolve(__dirname, "../history/manifest.txt"), 'utf8')
-        ) as Manifest;
+    const manifest = getManifest();
 
-    const { lastUpdate, updates: doneUpdates } = manifest;
+    const { lastUpdate, version, updates: completed } = manifest;
 
-    console.log('Last update:', new Date(lastUpdate).toLocaleString());
+    let [M, m, p] = (version || '0.0.1').split('.').map(Number);
 
-    manifest.updates.push(...((await Promise.all(updates.map(async update => {
+    log('Last update:', new Date(lastUpdate).toLocaleString());
+
+    updates = updates.filter(u => {
+        const completedUpdate = completed.find(c => c.name === u.name);
+        if (!completedUpdate) return true;
+    });
+
+    if (updates.length) makeBackup(version);
+
+    for (const update of updates) {
         const { name, description, test, execute } = update;
 
+        // if the test is true, then the update has been run
         const result = await test(new DB('main'));
 
-        if (result) {
-            console.log(`Running update ${name}...`);
+        log('Result:', name, result);
+
+        if (!result) {
+            log(`Running update ${name} (${description})`);
             try {
                 await execute(new DB('main'));
-            } catch (e) {
-                console.log(`Error running update ${name}:`, e);
-                return;
-            }
-            return {
-                name,
-                date: Date.now()
-            }
-        }
-    }))).filter(Boolean)));
 
-    fs.writeFileSync(path.resolve(__dirname, "../history/manifest.txt"), JSON.stringify(manifest, null, 4));
+                switch (update.type) {
+                    case 'major':
+                        M++;
+                        m = 0;
+                        p = 0;
+                        break;
+                    case 'minor':
+                        m++;
+                        p = 0;
+                        break;
+                    case 'patch':
+                        p++;
+                        break;
+                }
+
+            } catch (e) {
+                log(`Error running update ${name}:`, e);
+                process.exit(1);
+                // stop running updates because if one fails, the database may get corrupted
+            }
+        } else {
+            log(`Update ${name} passed the test but wasn't in the manifest, adding to manifest...`);
+            log('This only happens if the manifest was deleted, edited, or the database is a newer version than the manifest');
+        }
+
+        manifest.updates.push({
+            name,
+            date: Date.now(),
+            type: update.type
+        });
+    }
+
+    manifest.lastUpdate = Date.now();
+    manifest.version = `${M}.${m}.${p}`;
+
+    saveManifest(manifest);
 }
 
-function makeBackup() {
-    console.log('Backing up database...');
 
-    const newDB = path.resolve(__dirname, './history', `${Date.now()}.db`);
 
-    fs.copyFileSync(path.resolve(__dirname, '../database/main.db'), newDB);
+export async function revert(version: string) {
+    const updates = getUpdates();
+
+    const manifest = getManifest();
+    makeBackup(manifest.version);
+
+    const _updates = updates.slice();
+
+    let M = 0,
+        m = 0,
+        p = 1;
+    
+    for (const update of updates) {
+        switch (update.type) {
+            case 'major':
+                M++;
+                m = 0;
+                p = 0;
+                break;
+            case 'minor':
+                m++;
+                p = 0;
+                break;
+            case 'patch':
+                p++;
+                break;
+        }
+
+        _updates.shift(); // remove the earliest update
+        if (version === `${M}.${m}.${p}`) break;
+    }
+
+    for (const update of _updates.reverse()) {
+        try {
+            log('Reverting update:', update.name);
+            await update.revert(new DB('main'));
+        } catch (e) {
+            log('Error reverting update:', update.name);
+            log(e);
+            process.exit(1);
+            // stop reverting updates because if one fails, the database may get corrupted
+        }
+
+        manifest.updates.pop(); // remove the latest update
+    }
+
+    manifest.version = version;
+    manifest.lastUpdate = Date.now();
+
+    saveManifest(manifest);
+};
+
+function getUpdates(): Update[] {
+    const updates = fs.readdirSync(path.resolve(__dirname, './updates')).map(file => {
+        if (file.endsWith('.js')) {
+            file = file.replace('.js', '');
+            log('Imported update:', file);
+            return require('./updates/' + file).update as Update;
+        }
+    }).filter(Boolean) as Update[];
+
+    
+    // ensure all updates have a unique name
+    const names = updates.map(u => u.name);
+    const uniqueNames = [...new Set(names)];
+    if (names.length !== uniqueNames.length) {
+        error('All updates must have a unique name');
+        return [];
+    }
+
+    // ensure all updates are in order
+    updates.sort((a, b) => a.date - b.date);
+
+    return updates;
+}
+
+
+
+// generates a backup of the database
+function makeBackup(version: string) {
+    log('Backing up database...');
+
+    const newDB = path.resolve(__dirname, '../db/history', `${version}-${Date.now()}.db`);
+
+    fs.copyFileSync(path.resolve(__dirname, '../db/main.db'), newDB);
 }
 
 // cannot use setTimeout because the integer may overflow
@@ -318,24 +524,24 @@ const daysTimeout = (cb: () => void, days: number) => {
 }
 
 
-
+// deletes database backups after 7 days
 function setBackupIntervals() {
-    console.log('Setting backup intervals...');
+    log('Setting backup intervals...');
 
-    const files = fs.readdirSync(path.resolve(__dirname, '../history'));
+    const files = fs.readdirSync(path.resolve(__dirname, '../db/history'));
 
     for (const file of files) {
         if (file === 'manifest.txt') continue;
 
-        const p = path.resolve(__dirname, '../history', file);
+        const p = path.resolve(__dirname, '../db/history', file);
 
         const now = new Date();
-        const fileDate = new Date(parseInt(file.replace('.db', '')));
+        const fileDate = new Date(parseInt(file.split('-')[1].replace('.db', '')));
         const diff = now.getTime() - fileDate.getTime();
         const days = Math.floor(7 - (diff / (1000 * 60 * 60 * 24)));
 
         const deleteFile = () => {
-            console.log('Deleting file:', p);
+            log('Deleting file:', p);
             fs.unlinkSync(p);
         }
 
@@ -343,52 +549,85 @@ function setBackupIntervals() {
     }
 }
 
+// wrapper for running functions
 const runFunction = async(fn: () => any|Promise<any>) => {
     const now = Date.now();
     try {
         await fn();
     } catch (e) {
-        console.log('Error running function:', fn.name);
-        console.error(e);
+        error('Error running function:', fn.name);
+        error(e);
         return;
     }
 
-    console.log('Finished running function:', fn.name, 'in', Date.now() - now, 'ms');
+    log('Finished running function:', fn.name, 'in', Date.now() - now, 'ms');
 }
 
 
-const initEnv = () => {
+
+const prompt = async (question: string, force: boolean = false): Promise<string> => {
+    return new Promise((res, rej) => {
+        const stdin = process.stdin;
+        const stdout = process.stdout;
+
+        stdin.resume();
+        stdout.write(question);
+
+        stdin.once('data', async (data) => {
+            if (!data && force) return res(await prompt(question));
+            res(data.toString().trim());
+        });
+    });
+}
+
+
+
+
+// creates .env file if it doesn't exist
+const initEnv = async () => {
     if (fs.existsSync(path.resolve(__dirname, '../.env'))) return;
-    console.log('Creating .env file...');
+    log('Creating .env file...');
+
+    const domain = await prompt('Enter domain: ', true);
+    const dbKey = await prompt('Enter database key: ') || uuid();
+    const sendgridKey = await prompt('Enter sendgrid key: ') || '';
+    const httpOrHttps = await prompt('Enter [1] http or [2] https: ', true) === '1' ? 'http' : 'https';
+    const port = await prompt('Enter port: ', true);
+    const autoSignInUsername = await prompt('Enter auto sign in username: ', true);
+    const sendgridDefaultFrom = await prompt('Enter sendgrid default from: ') || '';
+    const homeLink = await prompt('Enter home link: ') || '/';
+    const sendStatusEmails = await prompt('Send status emails? [y/n]: ') === 'y' ? 'TRUE' : 'FALSE';
+    const logo = await prompt('Enter logo pathname: ') || '/';
+
+
     fs.writeFileSync(path.resolve(__dirname, '../.env'), `
-        PORT="3000"
-        DB_KEY=""
-        DOMAIN="http://localhost:3000"
-        
-        SENDGRID_API_KEY=""
+PORT="${port}"
+DB_KEY="${dbKey}"
+DOMAIN="${httpOrHttps}://${domain}"
+HOME_LINK="${homeLink}"
+LOGO = "${logo}"
 
-        AUTO_SIGN_IN_USERNAME=""
+SENDGRID_API_KEY="${sendgridKey}"
+SENDGRID_DEFAULT_FROM = '${sendgridDefaultFrom}'
+EMAIL_FOOTER = "This is an automated email, please do not reply."
 
-        ID_GENERATION_LINK=""
-        ID_GENERATION_KEY=""
-    `);
+
+SEND_STATUS_EMAILS = "${sendStatusEmails}"
+
+AUTO_SIGN_IN_USERNAME="${autoSignInUsername}"
+`.trim());
 }
 
 
 
-
+// entry point
 export const serverUpdate = async () => {
     try {
         await runTs(path.resolve(__dirname, './updates'));
     } catch (e) {}
     
-    const updates: Update[] = fs.readdirSync(path.resolve(__dirname, './updates')).map(file => {
-        if (file.endsWith('.js')) {
-            file = file.replace('.js', '');
-            console.log('Imported update:', file);
-            return require('./tests' + file) as Update;
-        }
-    }).filter(Boolean);
+    const updates: Update[] = getUpdates();
+
 
     function updateTests() {
         return runUpdates(updates);
@@ -399,13 +638,15 @@ export const serverUpdate = async () => {
     await runFunction(tableTest);
     await runFunction(updateTests);
 
-    if (args.includes('all') || args.includes('backup')) {
-        await runFunction(makeBackup);
+    if (args.includes('backup')) {
+        await runFunction(function backup() {
+            makeBackup(getManifest().version);
+        });
     }
 
     await runFunction(setBackupIntervals);
 
-    return console.log('Finished running server update');
+    return log('Finished running server update');
 }
 
 
@@ -415,15 +656,18 @@ if (args.includes('main')) {
             parentPort?.postMessage('update-complete');
         })
         .catch(e => {
-            console.log('Error running server update:', e);
+            log('Error running server update:', e);
             parentPort?.postMessage('update-error');
         });
 }
 
 
-export type Update = {
+export interface Update {
     name: string;
     description: string;
     test: (database: DB) => Promise<boolean>;
     execute: (database: DB) => Promise<void>;
+    revert: (database: DB) => Promise<void>;
+    date: number;
+    type: 'major' | 'minor' | 'patch';
 }
