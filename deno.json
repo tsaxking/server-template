@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-all --watch ./server/index.ts"
+  },
+  "compilerOptions": {
+    "noexplicitAny": false,
+    "lib": [
+      "deno.ns",
+      "dom",
+      "es2022",
+      "esnext"
+    ]
+  }
+}
