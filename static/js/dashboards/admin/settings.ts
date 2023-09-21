@@ -1,1 +1,0 @@
-const adminSettings = new Page('Settings');

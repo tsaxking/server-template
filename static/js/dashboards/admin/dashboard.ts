@@ -1,1 +1,0 @@
-const adminDashboard = new Page('Dashboard', true);

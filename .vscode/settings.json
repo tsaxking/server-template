@@ -1,6 +1,4 @@
 {
-    "cSpell.words": [
-        "spamscanner",
-        "subcomponents"
-    ]
+    "deno.enable": true,
+    // "deno.lint": true
 }
